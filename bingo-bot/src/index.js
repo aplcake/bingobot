@@ -1,8 +1,13 @@
 import { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
-import { createCanvas } from 'canvas';
+import { createCanvas, loadImage } from 'canvas';
 import express from 'express';
 import cors from 'cors';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ASSETS_DIR = join(__dirname, '..', 'assets');
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const API_KEY = process.env.API_KEY || 'changeme';
@@ -19,17 +24,24 @@ function loadDefaults() { ensureDataDir(); if (!existsSync(DEFAULTS_FILE)) retur
 function saveDefaults(d) { ensureDataDir(); writeFileSync(DEFAULTS_FILE, JSON.stringify(d, null, 2)); }
 let games = loadGames();
 
+// Try to load winner banner
+let winnerBanner = null;
+const bannerPath = join(ASSETS_DIR, 'winner-banner.png');
+if (existsSync(bannerPath)) {
+  loadImage(bannerPath).then(img => { winnerBanner = img; console.log('🖼️ Winner banner loaded'); }).catch(() => console.log('⚠️ Could not load winner banner, using fallback'));
+} else { console.log('ℹ️ No winner-banner.png in assets/, using generated fallback'); }
+
 const COL = [
-  { letter: 'B', min: 1, max: 15, color: '#ff6b35', dark: '#cc4400' },
-  { letter: 'I', min: 16, max: 30, color: '#00e5ff', dark: '#0091a1' },
-  { letter: 'N', min: 31, max: 45, color: '#00ff88', dark: '#009e54' },
-  { letter: 'G', min: 46, max: 60, color: '#ffd700', dark: '#b89a00' },
-  { letter: 'O', min: 61, max: 75, color: '#ff3366', dark: '#c41048' },
+  { letter: 'B', min: 1, max: 15, color: '#ff6b35', dark: '#cc4400', hex: 0xFF6B35 },
+  { letter: 'I', min: 16, max: 30, color: '#00e5ff', dark: '#0091a1', hex: 0x00E5FF },
+  { letter: 'N', min: 31, max: 45, color: '#00ff88', dark: '#009e54', hex: 0x00FF88 },
+  { letter: 'G', min: 46, max: 60, color: '#ffd700', dark: '#b89a00', hex: 0xFFD700 },
+  { letter: 'O', min: 61, max: 75, color: '#ff3366', dark: '#c41048', hex: 0xFF3366 },
 ];
 
 function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
-function colFor(n){return COL.find(c=>n>=c.min&&n<=c.max);}
-function ntc(n){if(typeof n==='string')return n;const c=colFor(n);return`${c.letter}${n}`;}
+function colFor(n){if(typeof n!=='number')return null;return COL.find(c=>n>=c.min&&n<=c.max)||null;}
+function ntc(n){if(typeof n==='string')return n;const c=colFor(n);return c?`${c.letter}${n}`:String(n);}
 
 function generateClassicCard(){const grid=[];for(let c=0;c<5;c++){const{min,max}=COL[c];const pool=[];for(let n=min;n<=max;n++)pool.push(n);const p=shuffle(pool).slice(0,5);for(let r=0;r<5;r++){if(!grid[r])grid[r]=[];grid[r][c]=p[r];}}grid[2][2]='FREE';return grid;}
 function generateCustomCard(pool){const p=shuffle(pool).slice(0,24);const grid=[];let i=0;for(let r=0;r<5;r++){grid[r]=[];for(let c=0;c<5;c++){grid[r][c]=(r===2&&c===2)?'FREE':p[i++];}}return grid;}
@@ -41,163 +53,187 @@ function checkWin(grid,called,wc){const m=grid.map(r=>r.map(c=>isMarked(c,called
   if(wc==='blackout')return m.every(r=>r.every(Boolean));if(wc==='four_corners')return m[0][0]&&m[0][4]&&m[4][0]&&m[4][4];
   if(wc==='x_pattern')return[0,1,2,3,4].every(i=>m[i][i])&&[0,1,2,3,4].every(i=>m[i][4-i]);if(wc==='plus')return m[2].every(Boolean)&&m.every(r=>r[2]);return false;}
 
-// ─── Image Generation ────────────────────────────────────────────────────────
+// ─── Image: Single Card ──────────────────────────────────────────────────────
 
-function renderCardImage(game, card, cardNum, totalCards) {
+function renderSingleCard(ctx, game, card, cardNum, totalCards, offsetY) {
   const called = game.calledNumbers || [];
   const isCustom = game.mode === 'custom';
   const cellW = isCustom ? 120 : 80;
   const cellH = isCustom ? 50 : 60;
-  const headerH = 50;
-  const titleH = 60;
+  const headerH = 44;
+  const labelH = 30;
   const padX = 20;
-  const padY = 10;
   const w = padX * 2 + cellW * 5;
-  const h = titleH + headerH + cellH * 5 + padY * 2;
+
+  // Card label
+  ctx.fillStyle = '#aaaaaa';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Card ${cardNum} of ${totalCards}`, padX, offsetY + 18);
+  const markedCount = card.grid.flat().filter(c => isMarked(c, called)).length;
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#666677';
+  ctx.font = '12px sans-serif';
+  ctx.fillText(`${markedCount}/25`, w - padX, offsetY + 18);
+
+  const gridTop = offsetY + labelH;
+
+  // Column headers
+  for (let c = 0; c < 5; c++) {
+    const x = padX + c * cellW;
+    ctx.fillStyle = COL[c].color;
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(isCustom ? '★' : COL[c].letter, x + cellW / 2, gridTop + 28);
+  }
+
+  // Grid
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 5; c++) {
+      const x = padX + c * cellW;
+      const y = gridTop + headerH + r * cellH;
+      const val = card.grid[r][c];
+      const marked = isMarked(val, called);
+      const ci = (!isCustom && typeof val === 'number') ? colFor(val) : null;
+
+      // Background
+      ctx.fillStyle = val === 'FREE' ? '#2a2a3a' : marked ? (ci ? ci.color : '#ff6b35') : '#16162a';
+      ctx.beginPath(); ctx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 6); ctx.fill();
+      ctx.strokeStyle = marked ? 'transparent' : '#2a2a3a'; ctx.lineWidth = 1; ctx.stroke();
+
+      // Text
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (val === 'FREE') { ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('★ FREE', x + cellW/2, y + cellH/2); }
+      else if (marked) { ctx.fillStyle = '#fff'; ctx.font = `bold ${isCustom?11:22}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,14):String(val), x+cellW/2, y+cellH/2); }
+      else { ctx.fillStyle = '#666677'; ctx.font = `${isCustom?11:18}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,14):String(val), x+cellW/2, y+cellH/2); }
+    }
+  }
+
+  return labelH + headerH + cellH * 5;
+}
+
+// ─── Image: Stacked Cards (all cards in one image) ──────────────────────────
+
+function renderStackedCards(game, cards, totalCards) {
+  const isCustom = game.mode === 'custom';
+  const cellW = isCustom ? 120 : 80;
+  const cellH = isCustom ? 50 : 60;
+  const cardH = 30 + 44 + cellH * 5 + 15; // label + header + grid + gap
+  const padX = 20;
+  const w = padX * 2 + cellW * 5;
+  const titleH = 55;
+  const h = titleH + cardH * cards.length + 10;
 
   const canvas = createCanvas(w, h);
   const ctx = canvas.getContext('2d');
 
   // Background
   ctx.fillStyle = '#0a0a14';
-  ctx.roundRect(0, 0, w, h, 12);
-  ctx.fill();
+  ctx.beginPath(); ctx.roundRect(0, 0, w, h, 12); ctx.fill();
 
-  // Title bar
+  // Title
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px sans-serif';
+  ctx.font = 'bold 17px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`${game.name} — Card ${cardNum}/${totalCards}`, w / 2, 28);
-  ctx.font = '12px sans-serif';
-  ctx.fillStyle = '#888888';
-  ctx.fillText(game.id, w / 2, 48);
-
-  const startY = titleH;
-
-  // Column headers
-  for (let c = 0; c < 5; c++) {
-    const x = padX + c * cellW;
-    const col = COL[c];
-    ctx.fillStyle = col.color;
-    ctx.font = 'bold 24px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(isCustom ? '★' : col.letter, x + cellW / 2, startY + 34);
-  }
-
-  // Grid cells
-  for (let r = 0; r < 5; r++) {
-    for (let c = 0; c < 5; c++) {
-      const x = padX + c * cellW;
-      const y = startY + headerH + r * cellH;
-      const val = card.grid[r][c];
-      const marked = isMarked(val, called);
-      const colInfo = (!isCustom && typeof val === 'number') ? colFor(val) : null;
-
-      // Cell background
-      if (val === 'FREE') {
-        ctx.fillStyle = '#2a2a3a';
-      } else if (marked && colInfo) {
-        ctx.fillStyle = colInfo.color;
-      } else if (marked) {
-        ctx.fillStyle = '#ff6b35';
-      } else {
-        ctx.fillStyle = '#16162a';
-      }
-      ctx.beginPath();
-      ctx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 6);
-      ctx.fill();
-
-      // Cell border
-      ctx.strokeStyle = marked ? 'transparent' : '#2a2a3a';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // Cell text
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      if (val === 'FREE') {
-        ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('★ FREE', x + cellW / 2, y + cellH / 2);
-      } else if (marked) {
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${isCustom ? 11 : 22}px sans-serif`;
-        const display = isCustom ? String(val).slice(0, 14) : String(val);
-        ctx.fillText(display, x + cellW / 2, y + cellH / 2);
-      } else {
-        ctx.fillStyle = '#666677';
-        ctx.font = `${isCustom ? 11 : 18}px sans-serif`;
-        const display = isCustom ? String(val).slice(0, 14) : String(val);
-        ctx.fillText(display, x + cellW / 2, y + cellH / 2);
-      }
-    }
-  }
-
-  // Progress bar at bottom
-  const markedCount = card.grid.flat().filter(c => isMarked(c, called)).length;
-  ctx.fillStyle = '#888888';
+  ctx.fillText(game.name, w / 2, 24);
+  ctx.fillStyle = '#666';
   ctx.font = '11px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(`${markedCount}/25 marked · ${game.winCondition}`, w / 2, h - 8);
+  ctx.fillText(`${game.id} · ${game.winCondition}`, w / 2, 42);
+
+  // Render each card
+  for (let i = 0; i < cards.length; i++) {
+    renderSingleCard(ctx, game, cards[i], i + 1, totalCards, titleH + i * cardH);
+  }
 
   return canvas.toBuffer('image/png');
 }
+
+// ─── Image: Bingo Ball ──────────────────────────────────────────────────────
 
 function renderBallImage(item, calledCount, total, isCustom) {
   const size = 200;
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext('2d');
-
-  // Transparent background
   ctx.clearRect(0, 0, size, size);
 
   const col = (!isCustom && typeof item === 'number') ? colFor(item) : null;
   const ballColor = col ? col.color : '#ff6b35';
   const ballDark = col ? col.dark : '#cc4400';
 
-  // Ball shadow
-  ctx.beginPath();
-  ctx.arc(size/2, size/2 + 4, 75, 0, Math.PI * 2);
-  ctx.fillStyle = '#00000044';
-  ctx.fill();
-
-  // Ball gradient
-  const grad = ctx.createRadialGradient(size/2 - 20, size/2 - 20, 10, size/2, size/2, 75);
-  grad.addColorStop(0, ballColor + 'cc');
-  grad.addColorStop(0.5, ballColor);
-  grad.addColorStop(1, ballDark);
-  ctx.beginPath();
-  ctx.arc(size/2, size/2, 75, 0, Math.PI * 2);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // White stripe
-  ctx.beginPath();
-  ctx.ellipse(size/2, size/2, 55, 16, 0, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffffdd';
-  ctx.fill();
-
+  // Shadow
+  ctx.beginPath(); ctx.arc(size/2, size/2+4, 75, 0, Math.PI*2); ctx.fillStyle='#00000044'; ctx.fill();
+  // Ball
+  const grad = ctx.createRadialGradient(size/2-20, size/2-20, 10, size/2, size/2, 75);
+  grad.addColorStop(0, ballColor+'cc'); grad.addColorStop(0.5, ballColor); grad.addColorStop(1, ballDark);
+  ctx.beginPath(); ctx.arc(size/2, size/2, 75, 0, Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+  // Stripe
+  ctx.beginPath(); ctx.ellipse(size/2, size/2, 55, 16, 0, 0, Math.PI*2); ctx.fillStyle='#ffffffdd'; ctx.fill();
   // Letter
-  if (col) {
-    ctx.fillStyle = '#222222';
-    ctx.font = 'bold 24px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(col.letter, size/2, size/2 - 20);
+  if(col){ctx.fillStyle='#222';ctx.font='bold 24px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(col.letter,size/2,size/2-20);}
+  // Number
+  ctx.fillStyle='#1a1a1a';ctx.font=`bold ${isCustom?16:48}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(isCustom?String(item).slice(0,12):String(item),size/2,size/2+(col?10:0));
+  // Count
+  ctx.fillStyle='#aaa';ctx.font='13px sans-serif';ctx.fillText(`${calledCount} of ${total}`,size/2,size-12);
+  return canvas.toBuffer('image/png');
+}
+
+// ─── Image: Winner Banner ───────────────────────────────────────────────────
+
+function renderWinnerImage(gameName, displayName) {
+  const w = 800, h = 400;
+  const canvas = createCanvas(w, h);
+  const ctx = canvas.getContext('2d');
+
+  if (winnerBanner) {
+    // Draw uploaded banner as background
+    ctx.drawImage(winnerBanner, 0, 0, w, h);
+    // Dark overlay for text readability
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    // Generated fallback
+    const grad = ctx.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, '#0a0a1a'); grad.addColorStop(0.5, '#1a1028'); grad.addColorStop(1, '#0a0a1a');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
+    // Gold border
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 4;
+    ctx.strokeRect(15, 15, w - 30, h - 30);
+    ctx.strokeStyle = '#ffd70044'; ctx.lineWidth = 1;
+    ctx.strokeRect(25, 25, w - 50, h - 50);
   }
 
-  // Number
-  ctx.fillStyle = '#1a1a1a';
-  ctx.font = `bold ${isCustom ? 16 : 48}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const display = isCustom ? String(item).slice(0, 12) : String(item);
-  ctx.fillText(display, size/2, size/2 + (col ? 10 : 0));
+  // Trophies
+  ctx.font = '60px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🏆', 100, h/2 - 20);
+  ctx.fillText('🏆', w - 100, h/2 - 20);
 
-  // Count text below ball
+  // "BINGO!" title
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 72px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('BINGO!', w/2, 120);
+
+  // Glow effect on title
+  ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 30;
+  ctx.fillText('BINGO!', w/2, 120);
+  ctx.shadowBlur = 0;
+
+  // Winner name
+  ctx.fillStyle = '#ffffff';
+  const nameSize = displayName.length > 20 ? 36 : displayName.length > 12 ? 48 : 56;
+  ctx.font = `bold ${nameSize}px sans-serif`;
+  ctx.fillText(displayName, w/2, h/2 + 20);
+
+  // Game name
   ctx.fillStyle = '#aaaaaa';
-  ctx.font = '13px sans-serif';
-  ctx.fillText(`${calledCount} of ${total}`, size/2, size - 12);
+  ctx.font = '20px sans-serif';
+  ctx.fillText(gameName, w/2, h - 70);
+
+  // Subtitle
+  ctx.fillStyle = '#ffd70088';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillText('★ WINNER ★', w/2, h/2 + 70);
 
   return canvas.toBuffer('image/png');
 }
@@ -224,7 +260,7 @@ client.on('interactionCreate', async (interaction) => {
     if (member.roles.cache.has(roleId)) cardCount += count;
   }
   if (cardCount === 0) return interaction.reply({ content: '❌ No qualifying role.', ephemeral: true });
-  if (cardCount > 10) cardCount = 10; // cap at 10
+  if (cardCount > 10) cardCount = 10;
 
   const cards = [];
   for (let i = 0; i < cardCount; i++) cards.push({ id: String(i), grid: generateCard(game) });
@@ -233,11 +269,10 @@ client.on('interactionCreate', async (interaction) => {
 
   try {
     const user = await client.users.fetch(userId);
-    for (let i = 0; i < cards.length; i++) {
-      const img = renderCardImage(game, cards[i], i + 1, cardCount);
-      const att = new AttachmentBuilder(img, { name: `card-${i + 1}.png` });
-      await user.send({ content: `🎱 **${game.name}** — Card ${i + 1}/${cardCount}`, files: [att] });
-    }
+    // Send ALL cards as one stacked image
+    const img = renderStackedCards(game, cards, cardCount);
+    const att = new AttachmentBuilder(img, { name: 'bingo-cards.png' });
+    await user.send({ content: `🎱 **${game.name}** — You have **${cardCount} card(s)**!\nNumbers that appear on your cards will be highlighted as they're called.`, files: [att] });
     await interaction.reply({ content: `🎰 You got **${cardCount} card(s)**! Check DMs.`, ephemeral: true });
   } catch { await interaction.reply({ content: '❌ Couldn\'t DM you. Open your DMs!', ephemeral: true }); }
 });
@@ -249,12 +284,16 @@ async function announceNumber(game, item) {
     const ch = await guild.channels.fetch(game.channelId);
     const isCustom = game.mode === 'custom';
     const total = isCustom ? game.itemPool.length : 75;
+    const col = colFor(typeof item === 'number' ? item : 0);
+    const embedColor = col ? col.hex : 0xFF6B35;
+
     const ballImg = renderBallImage(item, game.calledNumbers.length, total, isCustom);
     const att = new AttachmentBuilder(ballImg, { name: 'ball.png' });
     const embed = new EmbedBuilder()
       .setTitle(`🎱 ${ntc(item)}`)
       .setThumbnail('attachment://ball.png')
-      .setColor(colFor(typeof item === 'number' ? item : 1)?.color ? parseInt(colFor(item)?.color.replace('#', ''), 16) : 0x00FF88);
+      .setDescription(`**${game.calledNumbers.length}** of ${total} called`)
+      .setColor(embedColor);
     await ch.send({ embeds: [embed], files: [att] });
   } catch (e) { console.error('Announce fail:', e.message); }
 }
@@ -264,24 +303,32 @@ async function announceWinners(game, winners) {
   try {
     const guild = await client.guilds.fetch(game.guildId);
     const ch = await guild.channels.fetch(game.channelId);
-    const list = winners.map(w => `<@${w.discordId}> (Card #${w.cardIndex + 1})`).join('\n');
-    await ch.send({ embeds: [new EmbedBuilder().setTitle('🏆 BINGO! WE HAVE A WINNER!').setDescription(`**${game.name}**\n\n${list}`).setColor(0xFFD700)] });
+
+    for (const w of winners) {
+      const name = w.displayName || w.username;
+      const winImg = renderWinnerImage(game.name, name);
+      const att = new AttachmentBuilder(winImg, { name: 'winner.png' });
+      const embed = new EmbedBuilder()
+        .setTitle('🏆 BINGO! WE HAVE A WINNER!')
+        .setDescription(`**${name}**\n<@${w.discordId}> (Card #${w.cardIndex + 1})`)
+        .setImage('attachment://winner.png')
+        .setColor(0xFFD700);
+      await ch.send({ embeds: [embed], files: [att] });
+    }
   } catch (e) { console.error('Winner announce fail:', e.message); }
 }
 
-// SMART DM: only send to players whose cards contain the called item
+// SMART DM: only affected players, one stacked image per message
 async function sendAffectedCards(game, item) {
   for (const [userId, player] of Object.entries(game.players)) {
-    const affected = player.cards.some(card => card.grid.flat().includes(item));
-    if (!affected) continue; // skip players who don't have this number
+    const affectedCards = player.cards.filter(card => card.grid.flat().includes(item));
+    if (affectedCards.length === 0) continue;
     try {
       const user = await client.users.fetch(userId);
-      for (let i = 0; i < player.cards.length; i++) {
-        if (!player.cards[i].grid.flat().includes(item)) continue; // skip unaffected cards
-        const img = renderCardImage(game, player.cards[i], i + 1, player.cards.length);
-        const att = new AttachmentBuilder(img, { name: `card-${i + 1}.png` });
-        await user.send({ content: `📢 **${ntc(item)}** called! Your card ${i + 1} updated:`, files: [att] });
-      }
+      // Send ALL their cards (not just affected ones) so they see full state
+      const img = renderStackedCards(game, player.cards, player.cards.length);
+      const att = new AttachmentBuilder(img, { name: 'bingo-cards.png' });
+      await user.send({ content: `📢 **${ntc(item)}** called! You have it!`, files: [att] });
     } catch {}
   }
 }
@@ -304,7 +351,6 @@ app.post('/api/games', auth, (req, res) => {
   if (!name) return res.status(400).json({ error: 'name required' });
   if (mode === 'custom' && (!itemPool || itemPool.length < 24)) return res.status(400).json({ error: 'Custom needs 24+ items' });
   const id = `BINGO-${Date.now().toString(36).toUpperCase()}`;
-  // Use saved defaults for roleConfig if none provided
   const defaults = loadDefaults();
   const rc = Object.keys(roleConfig).length > 0 ? roleConfig : (defaults.roleConfig || {});
   games[id] = { id, name, mode, status: 'open', winCondition, roleConfig: rc, itemPool: mode === 'custom' ? itemPool : [], players: {}, calledNumbers: [], winners: [], channelId: null, guildId: null, messageId: null, createdAt: new Date().toISOString() };
@@ -315,21 +361,15 @@ app.get('/api/games/:id', auth, (req, res) => { const g = games[req.params.id]; 
 
 app.get('/api/games/:id/display', (req, res) => {
   const g = games[req.params.id]; if (!g) return res.status(404).json({ error: 'Not found' });
-  // Build leaderboard: best card per player, sorted by most marks
   const leaderboard = Object.entries(g.players).map(([uid, p]) => {
     let bestMarks = 0;
-    for (const card of p.cards) {
-      const marks = card.grid.flat().filter(c => isMarked(c, g.calledNumbers)).length;
-      if (marks > bestMarks) bestMarks = marks;
-    }
+    for (const card of p.cards) { const marks = card.grid.flat().filter(c => isMarked(c, g.calledNumbers)).length; if (marks > bestMarks) bestMarks = marks; }
     return { displayName: p.displayName || p.username, marks: bestMarks, cards: p.cards.length, isWinner: g.winners.some(w => w.discordId === uid) };
   }).sort((a, b) => b.marks - a.marks).slice(0, 15);
   res.json({ id: g.id, name: g.name, status: g.status, mode: g.mode || 'classic', winCondition: g.winCondition, calledNumbers: g.calledNumbers, itemPool: g.mode === 'custom' ? g.itemPool : [], playerCount: Object.keys(g.players).length, totalCards: Object.values(g.players).reduce((s, p) => s + p.cards.length, 0), winners: g.winners, lastCalledAt: g.lastCalledAt || null, leaderboard });
 });
 
 app.put('/api/games/:id/roles', auth, (req, res) => { const g = games[req.params.id]; if (!g) return res.status(404).json({ error: 'Not found' }); g.roleConfig = req.body.roleConfig || {}; saveGames(); res.json({ ok: true }); });
-
-// Save/load role defaults
 app.post('/api/defaults/roles', auth, (req, res) => { const d = loadDefaults(); d.roleConfig = req.body.roleConfig || {}; saveDefaults(d); res.json({ ok: true }); });
 app.get('/api/defaults/roles', auth, (_, res) => { const d = loadDefaults(); res.json({ roleConfig: d.roleConfig || {} }); });
 
@@ -340,7 +380,11 @@ app.post('/api/games/:id/post', auth, async (req, res) => {
     let channel; for (const guild of client.guilds.cache.values()) { channel = await guild.channels.fetch(channelId).catch(() => null); if (channel) { game.guildId = guild.id; break; } }
     if (!channel) return res.status(404).json({ error: 'Channel not found' }); game.channelId = channelId;
     const roleInfo = Object.entries(game.roleConfig).map(([rid, cnt]) => `<@&${rid}> → **${cnt}** card${cnt > 1 ? 's' : ''}`).join('\n') || 'No roles configured';
-    const embed = new EmbedBuilder().setTitle(`🎱 BINGO — ${game.name}`).setDescription(`**ID:** \`${game.id}\`\n**Mode:** ${game.mode === 'custom' ? '🎨 Custom' : '🔢 Classic'}\n**Win:** ${game.winCondition}\n\n**Cards per role (stacking):**\n${roleInfo}\n\nClick below to join!`).setColor(0xFF6B35).setFooter({ text: 'Cards stack! Multiple roles = more cards. DMs must be open.' });
+    const embed = new EmbedBuilder()
+      .setTitle(`🎱 BINGO — ${game.name}`)
+      .setDescription(`**ID:** \`${game.id}\`\n**Mode:** ${game.mode === 'custom' ? '🎨 Custom' : '🔢 Classic'}\n**Win:** ${game.winCondition}\n\n**Cards per role (stacking):**\n${roleInfo}\n\nClick below to join!`)
+      .setColor(0xFF6B35)
+      .setFooter({ text: '⚠️ Participating will result in DM messages from Bingo Bot when your numbers are called. Cards stack across roles. Make sure your DMs are open!' });
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`join_bingo_${game.id}`).setLabel('🎰 Join Game').setStyle(ButtonStyle.Success));
     const msg = await channel.send({ embeds: [embed], components: [row] }); game.messageId = msg.id; saveGames();
     res.json({ ok: true, messageId: msg.id });
@@ -370,7 +414,7 @@ app.post('/api/games/:id/call', auth, async (req, res) => {
   saveGames();
   await announceNumber(game, item);
   if (newWinners.length > 0) await announceWinners(game, newWinners);
-  await sendAffectedCards(game, item); // only DM players who have this number
+  await sendAffectedCards(game, item);
   res.json({ item, display: ntc(item), calledCount: game.calledNumbers.length, total: isCustom ? game.itemPool.length : 75, newWinners, totalWinners: game.winners.length });
 });
 
