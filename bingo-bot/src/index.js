@@ -191,6 +191,12 @@ function renderWinnerImage(gameName, displayName) {
   const w = 800, h = 400;
   const canvas = createCanvas(w, h);
   const ctx = canvas.getContext('2d');
+  const safeName = String(displayName || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u{10000}-\u{10FFFF}]/gu, '')
+    .replace(/[^\p{L}\p{N}\p{P}\p{Z}]/gu, '')
+    .trim() || 'Winner';
 
   const banner = winnerBanners.length > 0 ? winnerBanners[Math.floor(Math.random() * winnerBanners.length)] : null;
 
@@ -238,9 +244,9 @@ function renderWinnerImage(gameName, displayName) {
 
   // Winner name
   ctx.fillStyle = '#ffffff';
-  const nameSize = displayName.length > 20 ? 36 : displayName.length > 12 ? 48 : 56;
+  const nameSize = safeName.length > 20 ? 36 : safeName.length > 12 ? 48 : 56;
   ctx.font = `bold ${nameSize}px sans-serif`;
-  ctx.fillText(displayName, w/2, h/2 + 20);
+  ctx.fillText(safeName, w/2, h/2 + 20);
 
   // Game name
   ctx.fillStyle = '#aaaaaa';
