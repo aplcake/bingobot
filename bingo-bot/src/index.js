@@ -24,12 +24,16 @@ function loadDefaults() { ensureDataDir(); if (!existsSync(DEFAULTS_FILE)) retur
 function saveDefaults(d) { ensureDataDir(); writeFileSync(DEFAULTS_FILE, JSON.stringify(d, null, 2)); }
 let games = loadGames();
 
-// Try to load winner banner
-let winnerBanner = null;
-const bannerPath = join(ASSETS_DIR, 'winner-banner.png');
-if (existsSync(bannerPath)) {
-  loadImage(bannerPath).then(img => { winnerBanner = img; console.log('🖼️ Winner banner loaded'); }).catch(() => console.log('⚠️ Could not load winner banner, using fallback'));
-} else { console.log('ℹ️ No winner-banner.png in assets/, using generated fallback'); }
+// Load all winner banners from assets/winner-banners/
+let winnerBanners = [];
+const bannersDir = join(ASSETS_DIR, 'winner-banners');
+if (existsSync(bannersDir)) {
+  import('fs').then(fs => {
+    const files = fs.readdirSync(bannersDir).filter(f => /\.(png|jpg|jpeg)$/i.test(f));
+    Promise.all(files.map(f => loadImage(join(bannersDir, f)).catch(() => null)))
+      .then(imgs => { winnerBanners = imgs.filter(Boolean); console.log(`🖼️ Loaded ${winnerBanners.length} winner banner(s)`); });
+  });
+} else { console.log('ℹ️ No assets/winner-banners/ folder, using generated fallback'); }
 
 const COL = [
   { letter: 'B', min: 1, max: 15, color: '#ff6b35', dark: '#cc4400', hex: 0xFF6B35 },
@@ -185,9 +189,11 @@ function renderWinnerImage(gameName, displayName) {
   const canvas = createCanvas(w, h);
   const ctx = canvas.getContext('2d');
 
-  if (winnerBanner) {
+  const banner = winnerBanners.length > 0 ? winnerBanners[Math.floor(Math.random() * winnerBanners.length)] : null;
+
+  if (banner) {
     // Draw uploaded banner as background
-    ctx.drawImage(winnerBanner, 0, 0, w, h);
+    ctx.drawImage(banner, 0, 0, w, h);
     // Dark overlay for text readability
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(0, 0, w, h);
