@@ -62,6 +62,7 @@ export default function AdminPage(){
 
   async function addRole(){if(!ag||!ri)return;const u={...ag.roleConfig,[ri]:parseInt(rc)||1};await fetch(`${API}/api/games/${ag.id}/roles`,{method:'PUT',headers:H,body:JSON.stringify({roleConfig:u})});await fgi(ag.id);setRi('');setRc('1');}
   async function rmRole(rid:string){if(!ag)return;const u={...ag.roleConfig};delete u[rid];await fetch(`${API}/api/games/${ag.id}/roles`,{method:'PUT',headers:H,body:JSON.stringify({roleConfig:u})});await fgi(ag.id);}
+  async function saveRoleDefaults(){if(!ag)return;await fetch(`${API}/api/defaults/roles`,{method:'POST',headers:H,body:JSON.stringify({roleConfig:ag.roleConfig})});alert('Role config saved as default for future games!');}
   async function post(){if(!ag||!sc)return;setLd(true);try{await fetch(`${API}/api/games/${ag.id}/post`,{method:'POST',headers:H,body:JSON.stringify({channelId:sc})});await fgi(ag.id);}catch{}finally{setLd(false);}}
   async function start(){if(!ag)return;await fetch(`${API}/api/games/${ag.id}/start`,{method:'POST',headers:H});await fgi(ag.id);}
   async function call(spec?:any){if(!ag)return;setLd(true);try{const b=spec!==undefined?(ag.mode==='custom'?{item:spec}:{number:spec}):{};
@@ -122,7 +123,9 @@ export default function AdminPage(){
 
       {ag.status==='open'&&<><div className="card"><h2>🎭 Role → Cards</h2>
         {Object.entries(ag.roleConfig).map(([rid,cnt])=>{const role=roles.find(r=>r.id===rid);return<div key={rid} className="role-row"><span className="name">{role?.name||rid}</span><span className="count">{cnt as number} card{(cnt as number)>1?'s':''}</span><button className="btn btn-red btn-sm" onClick={()=>rmRole(rid)}>✕</button></div>;})}
-        <div className="row" style={{marginTop:'0.75rem'}}><div><label>Role</label><select value={ri} onChange={e=>setRi(e.target.value)}><option value="">Select...</option>{roles.map(r=><option key={r.id} value={r.id}>{r.name} ({r.memberCount})</option>)}</select></div><div style={{flex:'0 0 100px'}}><label>Cards</label><input type="number" min="1" max="10" value={rc} onChange={e=>setRc(e.target.value)}/></div><button className="btn btn-primary btn-sm" onClick={addRole} style={{alignSelf:'flex-end'}}>Add</button></div></div>
+        <div className="row" style={{marginTop:'0.75rem'}}><div><label>Role</label><select value={ri} onChange={e=>setRi(e.target.value)}><option value="">Select...</option>{roles.map(r=><option key={r.id} value={r.id}>{r.name} ({r.memberCount})</option>)}</select></div><div style={{flex:'0 0 100px'}}><label>Cards</label><input type="number" min="1" max="10" value={rc} onChange={e=>setRc(e.target.value)}/></div><button className="btn btn-primary btn-sm" onClick={addRole} style={{alignSelf:'flex-end'}}>Add</button></div>
+        {Object.keys(ag.roleConfig).length>0&&<button className="btn btn-outline btn-sm" onClick={saveRoleDefaults} style={{marginTop:'0.75rem'}}>💾 Save as default for future games</button>}
+        </div>
 
       <div className="card"><h2>📢 Post Join Message</h2>
         <div className="row"><div><label>Guild</label><select value={sg} onChange={e=>setSg(e.target.value)}>{guilds.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></div><div><label>Channel</label><select value={sc} onChange={e=>setSc(e.target.value)}><option value="">Select...</option>{cg?.channels.map(c=><option key={c.id} value={c.id}>#{c.name}</option>)}</select></div><button className="btn btn-green btn-sm" onClick={post} disabled={ld||!sc} style={{alignSelf:'flex-end'}}>{ag.messageId?'Repost':'Post'}</button></div>

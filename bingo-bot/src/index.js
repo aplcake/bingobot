@@ -57,76 +57,24 @@ function checkWin(grid,called,wc){const m=grid.map(r=>r.map(c=>isMarked(c,called
   if(wc==='blackout')return m.every(r=>r.every(Boolean));if(wc==='four_corners')return m[0][0]&&m[0][4]&&m[4][0]&&m[4][4];
   if(wc==='x_pattern')return[0,1,2,3,4].every(i=>m[i][i])&&[0,1,2,3,4].every(i=>m[i][4-i]);if(wc==='plus')return m[2].every(Boolean)&&m.every(r=>r[2]);return false;}
 
-// ─── Image: Single Card ──────────────────────────────────────────────────────
-
-function renderSingleCard(ctx, game, card, cardNum, totalCards, offsetY) {
-  const called = game.calledNumbers || [];
-  const isCustom = game.mode === 'custom';
-  const cellW = isCustom ? 120 : 80;
-  const cellH = isCustom ? 50 : 60;
-  const headerH = 44;
-  const labelH = 30;
-  const padX = 20;
-  const w = padX * 2 + cellW * 5;
-
-  // Card label
-  ctx.fillStyle = '#aaaaaa';
-  ctx.font = 'bold 13px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText(`Card ${cardNum} of ${totalCards}`, padX, offsetY + 18);
-  const markedCount = card.grid.flat().filter(c => isMarked(c, called)).length;
-  ctx.textAlign = 'right';
-  ctx.fillStyle = '#666677';
-  ctx.font = '12px sans-serif';
-  ctx.fillText(`${markedCount}/25`, w - padX, offsetY + 18);
-
-  const gridTop = offsetY + labelH;
-
-  // Column headers
-  for (let c = 0; c < 5; c++) {
-    const x = padX + c * cellW;
-    ctx.fillStyle = COL[c].color;
-    ctx.font = 'bold 22px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(isCustom ? '★' : COL[c].letter, x + cellW / 2, gridTop + 28);
-  }
-
-  // Grid
-  for (let r = 0; r < 5; r++) {
-    for (let c = 0; c < 5; c++) {
-      const x = padX + c * cellW;
-      const y = gridTop + headerH + r * cellH;
-      const val = card.grid[r][c];
-      const marked = isMarked(val, called);
-      const ci = (!isCustom && typeof val === 'number') ? colFor(val) : null;
-
-      // Background
-      ctx.fillStyle = val === 'FREE' ? '#2a2a3a' : marked ? (ci ? ci.color : '#ff6b35') : '#16162a';
-      ctx.beginPath(); ctx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 6); ctx.fill();
-      ctx.strokeStyle = marked ? 'transparent' : '#2a2a3a'; ctx.lineWidth = 1; ctx.stroke();
-
-      // Text
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      if (val === 'FREE') { ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('★ FREE', x + cellW/2, y + cellH/2); }
-      else if (marked) { ctx.fillStyle = '#fff'; ctx.font = `bold ${isCustom?11:22}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,14):String(val), x+cellW/2, y+cellH/2); }
-      else { ctx.fillStyle = '#666677'; ctx.font = `${isCustom?11:18}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,14):String(val), x+cellW/2, y+cellH/2); }
-    }
-  }
-
-  return labelH + headerH + cellH * 5;
-}
-
-// ─── Image: Stacked Cards (all cards in one image) ──────────────────────────
+// ─── Image: Cards (horizontal grid layout) ──────────────────────────────────
 
 function renderStackedCards(game, cards, totalCards) {
   const isCustom = game.mode === 'custom';
-  const cellW = isCustom ? 120 : 80;
-  const cellH = isCustom ? 50 : 60;
-  const cardH = 30 + 44 + cellH * 5 + 15; // label + header + grid + gap
-  const padX = 20;
-  const w = padX * 2 + cellW * 5;
-  const titleH = 55;
-  const h = titleH + cardH * cards.length + 10;
+  const cellW = isCustom ? 100 : 70;
+  const cellH = isCustom ? 42 : 52;
+  const headerH = 38;
+  const labelH = 26;
+  const cardPadX = 12;
+  const singleCardW = cardPadX * 2 + cellW * 5;
+  const singleCardH = labelH + headerH + cellH * 5;
+
+  const cols = cards.length <= 2 ? cards.length : 2;
+  const rows = Math.ceil(cards.length / cols);
+  const gap = 15;
+  const titleH = 50;
+  const w = gap + (singleCardW + gap) * cols;
+  const h = titleH + gap + (singleCardH + gap) * rows;
 
   const canvas = createCanvas(w, h);
   const ctx = canvas.getContext('2d');
@@ -137,19 +85,74 @@ function renderStackedCards(game, cards, totalCards) {
 
   // Title
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 17px sans-serif';
+  ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(game.name, w / 2, 24);
+  ctx.fillText(game.name, w / 2, 22);
   ctx.fillStyle = '#666';
-  ctx.font = '11px sans-serif';
-  ctx.fillText(`${game.id} · ${game.winCondition}`, w / 2, 42);
+  ctx.font = '10px sans-serif';
+  ctx.fillText(`${game.id} · ${game.winCondition}`, w / 2, 38);
 
-  // Render each card
+  // Render cards in grid
   for (let i = 0; i < cards.length; i++) {
-    renderSingleCard(ctx, game, cards[i], i + 1, totalCards, titleH + i * cardH);
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const offsetX = gap + col * (singleCardW + gap);
+    const offsetY = titleH + gap + row * (singleCardH + gap);
+
+    // Card background
+    ctx.fillStyle = '#0e0e1c';
+    ctx.beginPath(); ctx.roundRect(offsetX - 4, offsetY - 4, singleCardW + 8, singleCardH + 8, 8); ctx.fill();
+    ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1; ctx.stroke();
+
+    renderSingleCardAt(ctx, game, cards[i], i + 1, totalCards, offsetX, offsetY, cellW, cellH, headerH, labelH, cardPadX, isCustom);
   }
 
   return canvas.toBuffer('image/png');
+}
+
+function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW, cellH, headerH, labelH, padX, isCustom) {
+  const called = game.calledNumbers || [];
+
+  // Label
+  ctx.fillStyle = '#aaaaaa';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Card ${cardNum}/${totalCards}`, ox + padX, oy + 16);
+  const markedCount = card.grid.flat().filter(c => isMarked(c, called)).length;
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#666677';
+  ctx.font = '10px sans-serif';
+  ctx.fillText(`${markedCount}/25`, ox + padX + cellW * 5, oy + 16);
+
+  const gridTop = oy + labelH;
+
+  // Column headers
+  for (let c = 0; c < 5; c++) {
+    ctx.fillStyle = COL[c].color;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(isCustom ? '*' : COL[c].letter, ox + padX + c * cellW + cellW / 2, gridTop + 24);
+  }
+
+  // Grid
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 5; c++) {
+      const x = ox + padX + c * cellW;
+      const y = gridTop + headerH + r * cellH;
+      const val = card.grid[r][c];
+      const marked = isMarked(val, called);
+      const ci = (!isCustom && typeof val === 'number') ? colFor(val) : null;
+
+      ctx.fillStyle = val === 'FREE' ? '#2a2a3a' : marked ? (ci ? ci.color : '#ff6b35') : '#16162a';
+      ctx.beginPath(); ctx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 5); ctx.fill();
+      ctx.strokeStyle = marked ? 'transparent' : '#2a2a3a'; ctx.lineWidth = 1; ctx.stroke();
+
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (val === 'FREE') { ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px sans-serif'; ctx.fillText('FREE', x + cellW/2, y + cellH/2); }
+      else if (marked) { ctx.fillStyle = '#fff'; ctx.font = `bold ${isCustom?9:18}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,12):String(val), x+cellW/2, y+cellH/2); }
+      else { ctx.fillStyle = '#666677'; ctx.font = `${isCustom?9:15}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,12):String(val), x+cellW/2, y+cellH/2); }
+    }
+  }
 }
 
 // ─── Image: Bingo Ball ──────────────────────────────────────────────────────
@@ -209,10 +212,18 @@ function renderWinnerImage(gameName, displayName) {
     ctx.strokeRect(25, 25, w - 50, h - 50);
   }
 
-  // Trophies
-  ctx.font = '60px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('🏆', 100, h/2 - 20);
-  ctx.fillText('🏆', w - 100, h/2 - 20);
+  // Trophy symbols (canvas can't render emoji, use gold stars/text)
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 80px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('★', 100, h/2);
+  ctx.fillText('★', w - 100, h/2);
+  // Small stars
+  ctx.font = 'bold 40px sans-serif';
+  ctx.fillStyle = '#ffd700aa';
+  ctx.fillText('★', 60, h/2 - 60);
+  ctx.fillText('★', 140, h/2 + 50);
+  ctx.fillText('★', w - 60, h/2 - 60);
+  ctx.fillText('★', w - 140, h/2 + 50);
 
   // "BINGO!" title
   ctx.fillStyle = '#ffd700';
