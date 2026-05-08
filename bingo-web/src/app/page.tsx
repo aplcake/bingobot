@@ -17,9 +17,24 @@ function ago(d:string){const m=Math.floor((Date.now()-new Date(d).getTime())/600
 const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || '0000';
 
 export default function AdminPage(){
+  // ALL hooks must be at the top, before any early return
   const [authed,setAuthed]=useState(false);const[pin,setPin]=useState('');const[pinErr,setPinErr]=useState(false);
+  const [games,setGames]=useState<GS[]>([]);const[ag,setAg]=useState<Game|null>(null);const[guilds,setGuilds]=useState<Guild[]>([]);const[roles,setRoles]=useState<Role[]>([]);
+  const[conn,setConn]=useState(false);const[view,setView]=useState<'list'|'create'|'manage'|'history'>('list');
+  const[nn,setNn]=useState('');const[nw,setNw]=useState('line');const[nm,setNm]=useState<'classic'|'custom'>('classic');const[ni,setNi]=useState('');
+  const[sg,setSg]=useState('');const[sc,setSc]=useState('');const[ri,setRi]=useState('');const[rc,setRc]=useState('1');
+  const[jc,setJc]=useState<any>(null);const[ld,setLd]=useState(false);const[hg,setHg]=useState<Game|null>(null);
+
+  const fg=useCallback(async()=>{try{const r=await fetch(`${API}/api/games`,{headers:H});if(r.ok){setGames(await r.json());setConn(true);}}catch{setConn(false);}},[]);
+  const fgi=useCallback(async(id:string)=>{try{const r=await fetch(`${API}/api/games/${id}`,{headers:H});if(r.ok)setAg(await r.json());}catch{}},[]);
+  const fgu=useCallback(async()=>{try{const r=await fetch(`${API}/api/guilds`,{headers:H});if(r.ok)setGuilds(await r.json());}catch{}},[]);
+  const fr=useCallback(async(gid:string)=>{try{const r=await fetch(`${API}/api/guilds/${gid}/roles`,{headers:H});if(r.ok)setRoles(await r.json());}catch{}},[]);
 
   useEffect(()=>{if(typeof window!=='undefined'&&sessionStorage.getItem('bingo_auth')==='1')setAuthed(true);},[]);
+  useEffect(()=>{if(authed){fg();fgu();}},[fg,fgu,authed]);
+  useEffect(()=>{if(!ag||ag.status==='ended')return;const i=setInterval(()=>fgi(ag.id),3000);return()=>clearInterval(i);},[ag,fgi]);
+  useEffect(()=>{if(sg)fr(sg);},[sg,fr]);
+  useEffect(()=>{if(guilds.length>0&&!sg)setSg(guilds[0].id);},[guilds,sg]);
 
   function tryPin(){if(pin===ADMIN_PIN){setAuthed(true);sessionStorage.setItem('bingo_auth','1');setPinErr(false);}else{setPinErr(true);setPin('');}}
 
@@ -39,22 +54,6 @@ export default function AdminPage(){
       </div>
     </div>
   );
-
-  const [games,setGames]=useState<GS[]>([]);const[ag,setAg]=useState<Game|null>(null);const[guilds,setGuilds]=useState<Guild[]>([]);const[roles,setRoles]=useState<Role[]>([]);
-  const[conn,setConn]=useState(false);const[view,setView]=useState<'list'|'create'|'manage'|'history'>('list');
-  const[nn,setNn]=useState('');const[nw,setNw]=useState('line');const[nm,setNm]=useState<'classic'|'custom'>('classic');const[ni,setNi]=useState('');
-  const[sg,setSg]=useState('');const[sc,setSc]=useState('');const[ri,setRi]=useState('');const[rc,setRc]=useState('1');
-  const[jc,setJc]=useState<any>(null);const[ld,setLd]=useState(false);const[hg,setHg]=useState<Game|null>(null);
-
-  const fg=useCallback(async()=>{try{const r=await fetch(`${API}/api/games`,{headers:H});if(r.ok){setGames(await r.json());setConn(true);}}catch{setConn(false);}},[]);
-  const fgi=useCallback(async(id:string)=>{try{const r=await fetch(`${API}/api/games/${id}`,{headers:H});if(r.ok)setAg(await r.json());}catch{}},[]);
-  const fgu=useCallback(async()=>{try{const r=await fetch(`${API}/api/guilds`,{headers:H});if(r.ok)setGuilds(await r.json());}catch{}},[]);
-  const fr=useCallback(async(gid:string)=>{try{const r=await fetch(`${API}/api/guilds/${gid}/roles`,{headers:H});if(r.ok)setRoles(await r.json());}catch{}},[]);
-
-  useEffect(()=>{fg();fgu();},[fg,fgu]);
-  useEffect(()=>{if(!ag||ag.status==='ended')return;const i=setInterval(()=>fgi(ag.id),3000);return()=>clearInterval(i);},[ag,fgi]);
-  useEffect(()=>{if(sg)fr(sg);},[sg,fr]);
-  useEffect(()=>{if(guilds.length>0&&!sg)setSg(guilds[0].id);},[guilds,sg]);
 
   async function create(){if(!nn.trim())return;const ip=nm==='custom'?ni.split('\n').map(s=>s.trim()).filter(Boolean):[];
     if(nm==='custom'&&ip.length<24){alert(`Need 24+ items, you have ${ip.length}`);return;}
