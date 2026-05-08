@@ -14,7 +14,32 @@ function ltr(n:number){if(n<=15)return'B';if(n<=30)return'I';if(n<=45)return'N';
 function ntc(n:any){if(typeof n==='string')return n;return`${ltr(n)}${n}`;}
 function ago(d:string){const m=Math.floor((Date.now()-new Date(d).getTime())/60000);if(m<1)return'just now';if(m<60)return`${m}m ago`;const h=Math.floor(m/60);if(h<24)return`${h}h ago`;return`${Math.floor(h/24)}d ago`;}
 
+const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || '0000';
+
 export default function AdminPage(){
+  const [authed,setAuthed]=useState(false);const[pin,setPin]=useState('');const[pinErr,setPinErr]=useState(false);
+
+  useEffect(()=>{if(typeof window!=='undefined'&&sessionStorage.getItem('bingo_auth')==='1')setAuthed(true);},[]);
+
+  function tryPin(){if(pin===ADMIN_PIN){setAuthed(true);sessionStorage.setItem('bingo_auth','1');setPinErr(false);}else{setPinErr(true);setPin('');}}
+
+  if(!authed) return(
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',fontFamily:"'Outfit',sans-serif"}}>
+      <div style={{textAlign:'center',maxWidth:320,padding:'2rem'}}>
+        <div style={{fontSize:'3rem',marginBottom:'0.5rem'}}>🎱</div>
+        <h1 style={{fontSize:'1.5rem',fontWeight:900,color:'var(--text)',marginBottom:'0.25rem'}}>BINGO</h1>
+        <p style={{color:'var(--text-dim)',fontFamily:"'Space Mono',monospace",fontSize:'0.8rem',marginBottom:'1.5rem'}}>enter admin pin</p>
+        <input type="password" inputMode="numeric" value={pin} onChange={e=>setPin(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter')tryPin();}}
+          placeholder="••••"
+          style={{width:'100%',background:'var(--surface2)',border:`1px solid ${pinErr?'var(--red)':'var(--border)'}`,borderRadius:'8px',padding:'0.75rem 1rem',color:'var(--text)',fontFamily:"'Space Mono',monospace",fontSize:'1.5rem',textAlign:'center',letterSpacing:'0.3em',outline:'none'}}
+          autoFocus />
+        {pinErr&&<p style={{color:'var(--red)',fontSize:'0.8rem',marginTop:'0.5rem',fontFamily:"'Space Mono',monospace"}}>wrong pin</p>}
+        <button onClick={tryPin} style={{marginTop:'1rem',width:'100%',padding:'0.65rem',borderRadius:'8px',border:'none',background:'var(--accent)',color:'#fff',fontFamily:"'Outfit',sans-serif",fontSize:'0.9rem',fontWeight:600,cursor:'pointer'}}>Enter</button>
+      </div>
+    </div>
+  );
+
   const [games,setGames]=useState<GS[]>([]);const[ag,setAg]=useState<Game|null>(null);const[guilds,setGuilds]=useState<Guild[]>([]);const[roles,setRoles]=useState<Role[]>([]);
   const[conn,setConn]=useState(false);const[view,setView]=useState<'list'|'create'|'manage'|'history'>('list');
   const[nn,setNn]=useState('');const[nw,setNw]=useState('line');const[nm,setNm]=useState<'classic'|'custom'>('classic');const[ni,setNi]=useState('');

@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-type DS = { id:string;name:string;status:string;winCondition:string;mode:string;calledNumbers:any[];playerCount:number;totalCards:number;winners:any[];lastCalledAt:string|null;itemPool?:string[]; };
+type LB = { displayName:string; marks:number; cards:number; isWinner:boolean; };
+type DS = { id:string;name:string;status:string;winCondition:string;mode:string;calledNumbers:any[];playerCount:number;totalCards:number;winners:any[];lastCalledAt:string|null;itemPool?:string[];leaderboard?:LB[]; };
 const COLS = [
   {letter:'B',min:1,max:15,color:'#ff6b35',grad:'radial-gradient(circle at 35% 35%,#ff8f5e,#ff6b35,#cc4400)',glow:'#ff6b3566'},
   {letter:'I',min:16,max:30,color:'#00e5ff',grad:'radial-gradient(circle at 35% 35%,#4ef5ff,#00e5ff,#0091a1)',glow:'#00e5ff55'},
@@ -55,6 +56,24 @@ export default function DisplayPage(){
         <div className="display-stats">{[{v:game.playerCount,c:'var(--cyan)',l:'Players'},{v:game.totalCards,c:'var(--accent)',l:'Cards'},{v:game.winners.length,c:'var(--gold)',l:'Winners'}].map(s=><div key={s.l} className="stat"><div className="stat-value" style={{color:s.c}}>{s.v}</div><div className="stat-label">{s.l}</div></div>)}</div>
 
         {game.winners.length>0&&<div style={{width:'100%',marginTop:'0.5rem'}}>{game.winners.map((w:any,i:number)=><div key={i} style={{display:'flex',alignItems:'center',gap:'0.5rem',padding:'0.5rem 0.75rem',marginBottom:'0.25rem',background:'#ffd70011',borderRadius:'8px',border:'1px solid #ffd70033'}}><span style={{fontSize:'1.2rem'}}>🏆</span><span style={{fontWeight:600,fontSize:'0.85rem'}}>{w.displayName||w.username}</span><span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',color:'var(--text-dim)',marginLeft:'auto'}}>on {ntc(w.wonOnItem)}</span></div>)}</div>}
+
+        {/* Leaderboard */}
+        {game.leaderboard&&game.leaderboard.length>0&&game.calledNumbers.length>0&&(
+          <div style={{width:'100%',marginTop:'0.75rem'}}>
+            <div style={{fontSize:'0.75rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--text-dim)',marginBottom:'0.4rem'}}>🔥 Closest to Bingo</div>
+            <div style={{maxHeight:'200px',overflow:'auto'}}>
+              {game.leaderboard.slice(0,10).map((p:LB,i:number)=>{
+                const pct=Math.round((p.marks/25)*100);
+                const barColor=p.isWinner?'#ffd700':i===0?'var(--green)':i<3?'var(--cyan)':'var(--accent)';
+                return<div key={i} style={{display:'flex',alignItems:'center',gap:'0.5rem',padding:'0.3rem 0.5rem',marginBottom:'0.2rem',borderRadius:'6px',background:'#ffffff06',position:'relative',overflow:'hidden'}}>
+                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${pct}%`,background:`${barColor}15`,borderRadius:'6px',transition:'width 0.5s ease'}}/>
+                  <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',color:i<3?barColor:'var(--text-dim)',fontWeight:700,minWidth:'1.2rem',position:'relative'}}>{p.isWinner?'🏆':i+1}</span>
+                  <span style={{fontSize:'0.75rem',fontWeight:600,flex:1,position:'relative',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.displayName}</span>
+                  <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',color:barColor,fontWeight:700,position:'relative'}}>{p.marks}/25</span>
+                </div>;})}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="display-board">
