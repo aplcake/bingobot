@@ -143,12 +143,15 @@ function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW,
       const marked = isMarked(val, called);
       const ci = (!isCustom && typeof val === 'number') ? colFor(val) : null;
 
-      ctx.fillStyle = val === 'FREE' ? '#2a2a3a' : marked ? (ci ? ci.color : '#ff6b35') : '#16162a';
+      ctx.fillStyle = val === 'FREE' ? '#3d2a5c' : marked ? (ci ? ci.color : '#ff6b35') : '#16162a';
       ctx.beginPath(); ctx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 5); ctx.fill();
       ctx.strokeStyle = marked ? 'transparent' : '#2a2a3a'; ctx.lineWidth = 1; ctx.stroke();
 
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      if (val === 'FREE') { ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px sans-serif'; ctx.fillText('FREE', x + cellW/2, y + cellH/2); }
+      if (val === 'FREE') {
+        ctx.strokeStyle = '#ffd70066'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px sans-serif'; ctx.fillText('★ FREE', x + cellW/2, y + cellH/2);
+      }
       else if (marked) { ctx.fillStyle = '#fff'; ctx.font = `bold ${isCustom?9:18}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,12):String(val), x+cellW/2, y+cellH/2); }
       else { ctx.fillStyle = '#666677'; ctx.font = `${isCustom?9:15}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,12):String(val), x+cellW/2, y+cellH/2); }
     }
@@ -389,12 +392,69 @@ app.get('/api/games/:id', auth, (req, res) => { const g = games[req.params.id]; 
 
 app.get('/api/games/:id/display', (req, res) => {
   const g = games[req.params.id]; if (!g) return res.status(404).json({ error: 'Not found' });
+  const called = g.calledNumbers;
+  const wc = g.winCondition;
+
+  // Calculate win-condition-aware progress for each player's best card
   const leaderboard = Object.entries(g.players).map(([uid, p]) => {
-    let bestMarks = 0;
-    for (const card of p.cards) { const marks = card.grid.flat().filter(c => isMarked(c, g.calledNumbers)).length; if (marks > bestMarks) bestMarks = marks; }
-    return { displayName: p.displayName || p.username, marks: bestMarks, cards: p.cards.length, isWinner: g.winners.some(w => w.discordId === uid) };
-  }).sort((a, b) => b.marks - a.marks).slice(0, 15);
-  res.json({ id: g.id, name: g.name, status: g.status, mode: g.mode || 'classic', winCondition: g.winCondition, calledNumbers: g.calledNumbers, itemPool: g.mode === 'custom' ? g.itemPool : [], playerCount: Object.keys(g.players).length, totalCards: Object.values(g.players).reduce((s, p) => s + p.cards.length, 0), winners: g.winners, lastCalledAt: g.lastCalledAt || null, leaderboard });
+    let bestProgress = 0, bestTotal = 25, bestLabel = '', bestCardIdx = 0, bestMarks = 0;
+
+    for (let ci = 0; ci < p.cards.length; ci++) {
+      const grid = p.cards[ci].grid;
+      const m = grid.map(r => r.map(c => isMarked(c, called)));
+      const totalMarks = m.flat().filter(Boolean).length;
+      let progress = 0, total = 25, label = '';
+
+      if (wc === 'line') {
+        let best = 0;
+        // Check all 12 lines
+        for (let r = 0; r < 5; r++) { const cnt = m[r].filter(Boolean).length; if (cnt > best) best = cnt; }
+        for (let c = 0; c < 5; c++) { const cnt = m.filter(r => r[c]).length; if (cnt > best) best = cnt; }
+        const d1 = [0,1,2,3,4].filter(i => m[i][i]).length; if (d1 > best) best = d1;
+        const d2 = [0,1,2,3,4].filter(i => m[i][4-i]).length; if (d2 > best) best = d2;
+        progress = best; total = 5; label = `${best}/5 in a line`;
+      } else if (wc === 'blackout') {
+        progress = totalMarks; total = 25; label = `${totalMarks}/25`;
+      } else if (wc === 'four_corners') {
+        const corners = [m[0][0], m[0][4], m[4][0], m[4][4]].filter(Boolean).length;
+        progress = corners; total = 4; label = `${corners}/4 corners`;
+      } else if (wc === 'x_pattern') {
+        const d1 = [0,1,2,3,4].filter(i => m[i][i]).length;
+        const d2 = [0,1,2,3,4].filter(i => m[i][4-i]).length;
+        const unique = new Set([...[0,1,2,3,4].filter(i => m[i][i]).map(i => `${i},${i}`), ...[0,1,2,3,4].filter(i => m[i][4-i]).map(i => `${i},${4-i}`)]);
+        progress = unique.size; total = 9; label = `${unique.size}/9 in X`;
+      } else if (wc === 'plus') {
+        const positions = new Set();
+        for (let c = 0; c < 5; c++) if (m[2][c]) positions.add(`2,${c}`);
+        for (let r = 0; r < 5; r++) if (m[r][2]) positions.add(`${r},2`);
+        progress = positions.size; total = 9; label = `${positions.size}/9 in +`;
+      }
+
+      const score = progress / total;
+      if (score > bestProgress / bestTotal || (score === bestProgress / bestTotal && totalMarks > bestMarks)) {
+        bestProgress = progress; bestTotal = total; bestLabel = label; bestCardIdx = ci; bestMarks = totalMarks;
+      }
+    }
+
+    return {
+      displayName: p.displayName || p.username,
+      progress: bestProgress, total: bestTotal, label: bestLabel,
+      marks: bestMarks, cards: p.cards.length,
+      isWinner: g.winners.some(w => w.discordId === uid),
+      // Send best card grid for top players (hover preview)
+      bestCard: p.cards[bestCardIdx]?.grid || null,
+    };
+  }).sort((a, b) => {
+    // Sort by progress percentage, then total marks as tiebreaker
+    const aPct = a.progress / a.total, bPct = b.progress / b.total;
+    if (bPct !== aPct) return bPct - aPct;
+    return b.marks - a.marks;
+  }).slice(0, 15);
+
+  // Only send card grids for top 5 to keep payload small
+  const lb = leaderboard.map((p, i) => ({ ...p, bestCard: i < 5 ? p.bestCard : null }));
+
+  res.json({ id: g.id, name: g.name, status: g.status, mode: g.mode || 'classic', winCondition: g.winCondition, calledNumbers: g.calledNumbers, itemPool: g.mode === 'custom' ? g.itemPool : [], playerCount: Object.keys(g.players).length, totalCards: Object.values(g.players).reduce((s, p) => s + p.cards.length, 0), winners: g.winners, lastCalledAt: g.lastCalledAt || null, leaderboard: lb });
 });
 
 app.put('/api/games/:id/roles', auth, (req, res) => { const g = games[req.params.id]; if (!g) return res.status(404).json({ error: 'Not found' }); g.roleConfig = req.body.roleConfig || {}; saveGames(); res.json({ ok: true }); });

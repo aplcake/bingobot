@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-type LB = { displayName:string; marks:number; cards:number; isWinner:boolean; };
+type LB = { displayName:string; progress:number; total:number; label:string; marks:number; cards:number; isWinner:boolean; bestCard:any[][]|null; };
 type DS = { id:string;name:string;status:string;winCondition:string;mode:string;calledNumbers:any[];playerCount:number;totalCards:number;winners:any[];lastCalledAt:string|null;itemPool?:string[];leaderboard?:LB[]; };
 const COLS = [
   {letter:'B',min:1,max:15,color:'#ff6b35',grad:'radial-gradient(circle at 35% 35%,#ff8f5e,#ff6b35,#cc4400)',glow:'#ff6b3566'},
@@ -22,6 +22,7 @@ export default function DisplayPage(){
   const[game,setGame]=useState<DS|null>(null);const[pcc,setPcc]=useState(0);const[latest,setLatest]=useState<any>(null);
   const[isNew,setIsNew]=useState(false);const[showW,setShowW]=useState<any>(null);const[pwc,setPwc]=useState(0);const[err,setErr]=useState('');
   const[winQueue,setWinQueue]=useState<any[]>([]);
+  const[hoverIdx,setHoverIdx]=useState<number|null>(null);
 
   // Process winner queue — show each winner for 8 seconds
   useEffect(()=>{
@@ -73,57 +74,99 @@ export default function DisplayPage(){
 
         {/* Head-to-Head Race */}
         {game.leaderboard&&game.leaderboard.length>0&&game.calledNumbers.length>0&&(
-          <div style={{width:'100%',marginTop:'0.75rem'}}>
-            <div style={{fontSize:'0.75rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--text-dim)',marginBottom:'0.5rem'}}>🔥 Race to Bingo</div>
-            <div style={{display:'flex',flexDirection:'column',gap:'0.35rem',maxHeight:'280px',overflow:'auto'}}>
+          <div style={{width:'100%',marginTop:'0.75rem',position:'relative'}}>
+            <div style={{fontSize:'0.8rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--text-dim)',marginBottom:'0.6rem'}}>🔥 Race to Bingo</div>
+            <div style={{display:'flex',flexDirection:'column',gap:'0.4rem',maxHeight:'320px',overflow:'auto'}}>
               {game.leaderboard.slice(0,10).map((p:LB,i:number)=>{
-                const pct=Math.round((p.marks/25)*100);
+                const pct=Math.round((p.progress/p.total)*100);
+                const need=p.total-p.progress;
                 const isTop=i<3&&!p.isWinner;
-                const barColor=p.isWinner?'#ffd700':i===0?'#00ff88':i===1?'#00e5ff':i===2?'#ff6b35':'#555';
-                const glowColor=p.isWinner?'#ffd70044':i===0?'#00ff8844':i===1?'#00e5ff44':'transparent';
-                return<div key={i} style={{
-                  padding:'0.4rem 0.6rem',borderRadius:'8px',position:'relative',overflow:'hidden',
-                  background:isTop||p.isWinner?'#ffffff08':'#ffffff04',
-                  border:`1px solid ${isTop?barColor+'33':p.isWinner?'#ffd70044':'transparent'}`,
-                  boxShadow:isTop||p.isWinner?`0 0 15px ${glowColor}`:'none',
-                  transition:'all 0.5s ease',
-                }}>
-                  {/* Progress bar background */}
-                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${pct}%`,background:`${barColor}18`,borderRadius:'8px',transition:'width 0.8s cubic-bezier(0.25,1,0.5,1)'}}/>
+                const barColor=p.isWinner?'#ffd700':i===0?'#00ff88':i===1?'#00e5ff':i===2?'#ff6b35':'#666';
 
-                  <div style={{position:'relative',display:'flex',alignItems:'center',gap:'0.5rem'}}>
-                    {/* Rank */}
-                    <span style={{fontFamily:"'Space Mono',monospace",fontSize:i<3?'0.85rem':'0.7rem',fontWeight:900,color:barColor,minWidth:'1.4rem',textAlign:'center'}}>
-                      {p.isWinner?'👑':i+1}
-                    </span>
+                return<div key={i}
+                  onMouseEnter={()=>p.bestCard&&setHoverIdx(i)}
+                  onMouseLeave={()=>setHoverIdx(null)}
+                  style={{
+                    padding:i<3?'0.6rem 0.75rem':'0.45rem 0.75rem',
+                    borderRadius:'10px',position:'relative',overflow:'hidden',cursor:p.bestCard?'pointer':'default',
+                    background:hoverIdx===i?'#ffffff12':p.isWinner?'#ffd70010':isTop?'#ffffff0a':'#ffffff05',
+                    border:`1px solid ${hoverIdx===i?barColor+'66':p.isWinner?'#ffd70044':isTop?barColor+'30':'#ffffff0a'}`,
+                    transition:'all 0.3s ease',
+                  }}>
+                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${pct}%`,
+                    background:`linear-gradient(90deg,${barColor}20,${barColor}10)`,
+                    borderRadius:'10px',transition:'width 1s cubic-bezier(0.25,1,0.5,1)'}}/>
 
-                    {/* Name */}
-                    <span style={{fontSize:i<3?'0.85rem':'0.75rem',fontWeight:i<3?700:500,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:i<3?'#fff':'var(--text-dim)'}}>
+                  <div style={{position:'relative',display:'flex',alignItems:'center',gap:'0.6rem'}}>
+                    <div style={{
+                      minWidth:i<3?'2rem':'1.6rem',height:i<3?'2rem':'1.6rem',
+                      borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',
+                      background:p.isWinner?'#ffd700':isTop?barColor+'22':'transparent',
+                      border:`1.5px solid ${p.isWinner?'#ffd700':isTop?barColor:'#333'}`,
+                    }}>
+                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:i<3?'0.9rem':'0.75rem',fontWeight:900,
+                        color:p.isWinner?'#000':barColor}}>
+                        {p.isWinner?'W':i+1}
+                      </span>
+                    </div>
+
+                    <span style={{fontSize:i<3?'0.95rem':'0.82rem',fontWeight:i<3?700:500,flex:1,
+                      whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',
+                      color:p.isWinner?'#ffd700':i<3?'#fff':'#aaa'}}>
                       {p.displayName}
                     </span>
 
-                    {/* Progress indicator */}
-                    <div style={{display:'flex',alignItems:'center',gap:'0.3rem'}}>
-                      {/* Mini squares showing 5x5 progress */}
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'1px'}}>
-                        {Array.from({length:25},(_,s)=>(
-                          <div key={s} style={{width:i<3?4:3,height:i<3?4:3,borderRadius:1,background:s<p.marks?barColor:'#333',transition:'background 0.3s'}}/>
-                        ))}
-                      </div>
-                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',fontWeight:700,color:barColor,minWidth:'2.5rem',textAlign:'right'}}>
-                        {p.marks}/25
+                    <div style={{display:'flex',alignItems:'center',gap:'0.5rem',flexShrink:0}}>
+                      {!p.isWinner&&need>0&&<span style={{fontSize:'0.65rem',color:'#555',fontFamily:"'Space Mono',monospace"}}>
+                        {need} away
+                      </span>}
+                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:i<3?'0.85rem':'0.72rem',fontWeight:900,color:barColor}}>
+                        {p.label}
                       </span>
                     </div>
                   </div>
 
-                  {/* For top 3, show percentage text */}
-                  {i<3&&<div style={{position:'relative',marginTop:'0.15rem'}}>
-                    <div style={{height:3,borderRadius:2,background:'#ffffff08',overflow:'hidden'}}>
-                      <div style={{height:'100%',width:`${pct}%`,background:barColor,borderRadius:2,transition:'width 0.8s cubic-bezier(0.25,1,0.5,1)',boxShadow:`0 0 8px ${barColor}`}}/>
-                    </div>
+                  {i<3&&<div style={{position:'relative',marginTop:'0.4rem',height:4,borderRadius:3,background:'#ffffff0a',overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${pct}%`,borderRadius:3,
+                      background:`linear-gradient(90deg,${barColor}88,${barColor})`,
+                      boxShadow:`0 0 10px ${barColor}66`,
+                      transition:'width 1s cubic-bezier(0.25,1,0.5,1)'}}/>
                   </div>}
                 </div>;})}
             </div>
+
+            {/* Hover card preview */}
+            {hoverIdx!==null&&game.leaderboard[hoverIdx]?.bestCard&&(()=>{
+              const p=game.leaderboard[hoverIdx];const grid=p.bestCard!;
+              const colColors=['#ff6b35','#00e5ff','#00ff88','#ffd700','#ff3366'];
+              return<div style={{
+                position:'absolute',right:'calc(100% + 12px)',top:0,
+                background:'#0c0c1a',border:'1px solid #2a2a3a',borderRadius:'12px',
+                padding:'0.75rem',zIndex:50,boxShadow:'0 8px 32px #00000088',
+                minWidth:'220px',
+              }}>
+                <div style={{fontSize:'0.75rem',fontWeight:700,marginBottom:'0.4rem',color:'#fff'}}>{p.displayName}</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'2px',marginBottom:'0.3rem'}}>
+                  {'BINGO'.split('').map((l,ci)=><div key={l} style={{textAlign:'center',fontSize:'0.65rem',fontWeight:900,color:colColors[ci],padding:'2px 0'}}>{l}</div>)}
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'2px'}}>
+                  {grid.flat().map((cell:any,ci:number)=>{
+                    const isFree=cell==='FREE';
+                    const marked=isFree||game.calledNumbers.includes(cell);
+                    const colIdx=ci%5;
+                    return<div key={ci} style={{
+                      width:'100%',aspectRatio:'1',display:'flex',alignItems:'center',justifyContent:'center',
+                      borderRadius:'4px',fontSize:isFree?'0.5rem':'0.65rem',fontWeight:700,
+                      fontFamily:"'Space Mono',monospace",
+                      background:isFree?'#3d2a5c':marked?colColors[colIdx]:'#16162a',
+                      color:isFree?'#ffd700':marked?'#fff':'#444',
+                      border:`1px solid ${marked?'transparent':'#2a2a3a'}`,
+                    }}>{isFree?'★':typeof cell==='number'?cell:String(cell).slice(0,3)}</div>;
+                  })}
+                </div>
+                <div style={{fontSize:'0.6rem',color:'#666',marginTop:'0.3rem',fontFamily:"'Space Mono',monospace",textAlign:'center'}}>{p.label}</div>
+              </div>;
+            })()}
           </div>
         )}
       </div>
