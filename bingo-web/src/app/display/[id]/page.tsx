@@ -21,11 +21,25 @@ export default function DisplayPage(){
   const params=useParams();const gameId=params.id as string;
   const[game,setGame]=useState<DS|null>(null);const[pcc,setPcc]=useState(0);const[latest,setLatest]=useState<any>(null);
   const[isNew,setIsNew]=useState(false);const[showW,setShowW]=useState<any>(null);const[pwc,setPwc]=useState(0);const[err,setErr]=useState('');
+  const[winQueue,setWinQueue]=useState<any[]>([]);
+
+  // Process winner queue — show each winner for 8 seconds
+  useEffect(()=>{
+    if(showW||winQueue.length===0)return;
+    const next=winQueue[0];
+    setShowW(next);confetti();
+    setWinQueue(q=>q.slice(1));
+    setTimeout(()=>setShowW(null),8000);
+  },[showW,winQueue]);
 
   const fetch_=useCallback(async()=>{try{const r=await fetch(`${API}/api/games/${gameId}/display`);if(!r.ok){setErr('Game not found');return;}const d:DS=await r.json();
     if(d.calledNumbers.length>pcc&&pcc>0){setLatest(d.calledNumbers[d.calledNumbers.length-1]);setIsNew(true);setTimeout(()=>setIsNew(false),1500);}
     setPcc(d.calledNumbers.length);
-    if(d.winners.length>pwc&&pwc>0){setShowW(d.winners[d.winners.length-1]);confetti();setTimeout(()=>setShowW(null),8000);}
+    if(d.winners.length>pwc&&pwc>0){
+      // Queue ALL new winners, not just the last one
+      const newWinners=d.winners.slice(pwc);
+      setWinQueue(q=>[...q,...newWinners]);
+    }
     setPwc(d.winners.length);
     if(d.calledNumbers.length>0)setLatest(d.calledNumbers[d.calledNumbers.length-1]);
     setGame(d);}catch{setErr('Connection lost');}
@@ -57,19 +71,57 @@ export default function DisplayPage(){
 
         {game.winners.length>0&&<div style={{width:'100%',marginTop:'0.5rem'}}>{game.winners.map((w:any,i:number)=><div key={i} style={{display:'flex',alignItems:'center',gap:'0.5rem',padding:'0.5rem 0.75rem',marginBottom:'0.25rem',background:'#ffd70011',borderRadius:'8px',border:'1px solid #ffd70033'}}><span style={{fontSize:'1.2rem'}}>🏆</span><span style={{fontWeight:600,fontSize:'0.85rem'}}>{w.displayName||w.username}</span><span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',color:'var(--text-dim)',marginLeft:'auto'}}>on {ntc(w.wonOnItem)}</span></div>)}</div>}
 
-        {/* Leaderboard */}
+        {/* Head-to-Head Race */}
         {game.leaderboard&&game.leaderboard.length>0&&game.calledNumbers.length>0&&(
           <div style={{width:'100%',marginTop:'0.75rem'}}>
-            <div style={{fontSize:'0.75rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--text-dim)',marginBottom:'0.4rem'}}>🔥 Closest to Bingo</div>
-            <div style={{maxHeight:'200px',overflow:'auto'}}>
+            <div style={{fontSize:'0.75rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--text-dim)',marginBottom:'0.5rem'}}>🔥 Race to Bingo</div>
+            <div style={{display:'flex',flexDirection:'column',gap:'0.35rem',maxHeight:'280px',overflow:'auto'}}>
               {game.leaderboard.slice(0,10).map((p:LB,i:number)=>{
                 const pct=Math.round((p.marks/25)*100);
-                const barColor=p.isWinner?'#ffd700':i===0?'var(--green)':i<3?'var(--cyan)':'var(--accent)';
-                return<div key={i} style={{display:'flex',alignItems:'center',gap:'0.5rem',padding:'0.3rem 0.5rem',marginBottom:'0.2rem',borderRadius:'6px',background:'#ffffff06',position:'relative',overflow:'hidden'}}>
-                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${pct}%`,background:`${barColor}15`,borderRadius:'6px',transition:'width 0.5s ease'}}/>
-                  <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',color:i<3?barColor:'var(--text-dim)',fontWeight:700,minWidth:'1.2rem',position:'relative'}}>{p.isWinner?'🏆':i+1}</span>
-                  <span style={{fontSize:'0.75rem',fontWeight:600,flex:1,position:'relative',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.displayName}</span>
-                  <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',color:barColor,fontWeight:700,position:'relative'}}>{p.marks}/25</span>
+                const isTop=i<3&&!p.isWinner;
+                const barColor=p.isWinner?'#ffd700':i===0?'#00ff88':i===1?'#00e5ff':i===2?'#ff6b35':'#555';
+                const glowColor=p.isWinner?'#ffd70044':i===0?'#00ff8844':i===1?'#00e5ff44':'transparent';
+                return<div key={i} style={{
+                  padding:'0.4rem 0.6rem',borderRadius:'8px',position:'relative',overflow:'hidden',
+                  background:isTop||p.isWinner?'#ffffff08':'#ffffff04',
+                  border:`1px solid ${isTop?barColor+'33':p.isWinner?'#ffd70044':'transparent'}`,
+                  boxShadow:isTop||p.isWinner?`0 0 15px ${glowColor}`:'none',
+                  transition:'all 0.5s ease',
+                }}>
+                  {/* Progress bar background */}
+                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${pct}%`,background:`${barColor}18`,borderRadius:'8px',transition:'width 0.8s cubic-bezier(0.25,1,0.5,1)'}}/>
+
+                  <div style={{position:'relative',display:'flex',alignItems:'center',gap:'0.5rem'}}>
+                    {/* Rank */}
+                    <span style={{fontFamily:"'Space Mono',monospace",fontSize:i<3?'0.85rem':'0.7rem',fontWeight:900,color:barColor,minWidth:'1.4rem',textAlign:'center'}}>
+                      {p.isWinner?'👑':i+1}
+                    </span>
+
+                    {/* Name */}
+                    <span style={{fontSize:i<3?'0.85rem':'0.75rem',fontWeight:i<3?700:500,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:i<3?'#fff':'var(--text-dim)'}}>
+                      {p.displayName}
+                    </span>
+
+                    {/* Progress indicator */}
+                    <div style={{display:'flex',alignItems:'center',gap:'0.3rem'}}>
+                      {/* Mini squares showing 5x5 progress */}
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'1px'}}>
+                        {Array.from({length:25},(_,s)=>(
+                          <div key={s} style={{width:i<3?4:3,height:i<3?4:3,borderRadius:1,background:s<p.marks?barColor:'#333',transition:'background 0.3s'}}/>
+                        ))}
+                      </div>
+                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',fontWeight:700,color:barColor,minWidth:'2.5rem',textAlign:'right'}}>
+                        {p.marks}/25
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* For top 3, show percentage text */}
+                  {i<3&&<div style={{position:'relative',marginTop:'0.15rem'}}>
+                    <div style={{height:3,borderRadius:2,background:'#ffffff08',overflow:'hidden'}}>
+                      <div style={{height:'100%',width:`${pct}%`,background:barColor,borderRadius:2,transition:'width 0.8s cubic-bezier(0.25,1,0.5,1)',boxShadow:`0 0 8px ${barColor}`}}/>
+                    </div>
+                  </div>}
                 </div>;})}
             </div>
           </div>

@@ -69,7 +69,7 @@ function renderStackedCards(game, cards, totalCards) {
   const singleCardW = cardPadX * 2 + cellW * 5;
   const singleCardH = labelH + headerH + cellH * 5;
 
-  const cols = cards.length <= 2 ? cards.length : 2;
+  const cols = cards.length <= 3 ? cards.length : Math.sqrt(cards.length) % 1 === 0 ? Math.sqrt(cards.length) : Math.ceil(cards.length / 2);
   const rows = Math.ceil(cards.length / cols);
   const gap = 15;
   const titleH = 50;
@@ -87,7 +87,7 @@ function renderStackedCards(game, cards, totalCards) {
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(game.name, w / 2, 22);
+  ctx.fillText(safeName(game.name), w / 2, 22);
   ctx.fillStyle = '#666';
   ctx.font = '10px sans-serif';
   ctx.fillText(`${game.id} · ${game.winCondition}`, w / 2, 38);
@@ -187,10 +187,21 @@ function renderBallImage(item, calledCount, total, isCustom) {
 
 // ─── Image: Winner Banner ───────────────────────────────────────────────────
 
+// Strip emoji/unicode that canvas can't render
+function safeName(name) {
+  return String(name || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u{10000}-\u{10FFFF}]/gu, '')
+    .replace(/[^\p{L}\p{N}\p{P}\p{Z}]/gu, '')
+    .trim() || 'Player';
+}
+
 function renderWinnerImage(gameName, displayName) {
   const w = 800, h = 400;
   const canvas = createCanvas(w, h);
   const ctx = canvas.getContext('2d');
+  const cleanName = safeName(displayName);
 
   const banner = winnerBanners.length > 0 ? winnerBanners[Math.floor(Math.random() * winnerBanners.length)] : null;
 
@@ -238,14 +249,14 @@ function renderWinnerImage(gameName, displayName) {
 
   // Winner name
   ctx.fillStyle = '#ffffff';
-  const nameSize = displayName.length > 20 ? 36 : displayName.length > 12 ? 48 : 56;
+  const nameSize = cleanName.length > 20 ? 36 : cleanName.length > 12 ? 48 : 56;
   ctx.font = `bold ${nameSize}px sans-serif`;
-  ctx.fillText(displayName, w/2, h/2 + 20);
+  ctx.fillText(cleanName, w/2, h/2 + 20);
 
   // Game name
   ctx.fillStyle = '#aaaaaa';
   ctx.font = '20px sans-serif';
-  ctx.fillText(gameName, w/2, h - 70);
+  ctx.fillText(safeName(gameName), w/2, h - 70);
 
   // Subtitle
   ctx.fillStyle = '#ffd70088';

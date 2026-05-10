@@ -64,7 +64,7 @@ export default function AdminPage(){
   async function rmRole(rid:string){if(!ag)return;const u={...ag.roleConfig};delete u[rid];await fetch(`${API}/api/games/${ag.id}/roles`,{method:'PUT',headers:H,body:JSON.stringify({roleConfig:u})});await fgi(ag.id);}
   async function saveRoleDefaults(){if(!ag)return;await fetch(`${API}/api/defaults/roles`,{method:'POST',headers:H,body:JSON.stringify({roleConfig:ag.roleConfig})});alert('Role config saved as default for future games!');}
   async function post(){if(!ag||!sc)return;setLd(true);try{await fetch(`${API}/api/games/${ag.id}/post`,{method:'POST',headers:H,body:JSON.stringify({channelId:sc})});await fgi(ag.id);}catch{}finally{setLd(false);}}
-  async function start(){if(!ag)return;await fetch(`${API}/api/games/${ag.id}/start`,{method:'POST',headers:H});await fgi(ag.id);}
+  async function start(){if(!ag||!confirm(`Lock & start "${ag.name}"? No more players can join after this.`))return;await fetch(`${API}/api/games/${ag.id}/start`,{method:'POST',headers:H});await fgi(ag.id);}
   async function call(spec?:any){if(!ag)return;setLd(true);try{const b=spec!==undefined?(ag.mode==='custom'?{item:spec}:{number:spec}):{};
     const r=await fetch(`${API}/api/games/${ag.id}/call`,{method:'POST',headers:H,body:JSON.stringify(b)});if(r.ok){const d=await r.json();setJc(d.item);setTimeout(()=>setJc(null),2000);await fgi(ag.id);}}catch{}finally{setLd(false);}}
   async function end(){if(!ag||!confirm('End this game?'))return;await fetch(`${API}/api/games/${ag.id}/end`,{method:'POST',headers:H});await fgi(ag.id);await fg();}
