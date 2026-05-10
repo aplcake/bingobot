@@ -174,7 +174,7 @@ export default function DisplayPage(){
                     <div style={{minWidth:'2.2rem',height:'2.2rem',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',background:p.isWinner?'#ffd700':isTop?barColor+'22':'transparent',border:`1.5px solid ${p.isWinner?'#ffd700':isTop?barColor:'#333'}`}}>
                       <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.95rem',fontWeight:900,color:p.isWinner?'#000':barColor}}>{p.isWinner?'W':i+1}</span>
                     </div>
-                    <span style={{fontSize:'1rem',fontWeight:i<3?700:500,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:p.isWinner?'#ffd700':i<3?'#fff':'#aaa'}}>{p.displayName}</span>
+                    <span style={{fontSize:'1rem',fontWeight:i<3?700:500,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:p.isWinner?'#ffd700':i<3?'#fff':'#aaa'}}>{p.displayName} <span style={{fontSize:'0.65rem',color:'#555',fontWeight:400}}>{p.cards}c</span></span>
                     <div style={{display:'flex',alignItems:'center',gap:'0.5rem',flexShrink:0}}>
                       {!p.isWinner&&need>0&&<span style={{fontSize:'0.7rem',color:'#555',fontFamily:"'Space Mono',monospace"}}>{need} away</span>}
                       <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.9rem',fontWeight:900,color:barColor}}>{p.label}</span>

@@ -22,6 +22,34 @@ function loadGames() { ensureDataDir(); if (!existsSync(DATA_FILE)) return {}; t
 function saveGames() { ensureDataDir(); writeFileSync(DATA_FILE, JSON.stringify(games, null, 2)); }
 function loadDefaults() { ensureDataDir(); if (!existsSync(DEFAULTS_FILE)) return {}; try { return JSON.parse(readFileSync(DEFAULTS_FILE, 'utf8')); } catch { return {}; } }
 function saveDefaults(d) { ensureDataDir(); writeFileSync(DEFAULTS_FILE, JSON.stringify(d, null, 2)); }
+
+// Player loyalty tracking
+const HISTORY_FILE = './data/player-history.json';
+function loadHistory() { ensureDataDir(); if (!existsSync(HISTORY_FILE)) return {}; try { return JSON.parse(readFileSync(HISTORY_FILE, 'utf8')); } catch { return {}; } }
+function saveHistory(h) { ensureDataDir(); writeFileSync(HISTORY_FILE, JSON.stringify(h, null, 2)); }
+let playerHistory = loadHistory(); // { odiscordId: { gamesPlayed: N, wins: N, lastGame: date } }
+
+function getLoyaltyTier(gamesPlayed) {
+  if (gamesPlayed >= 10) return { name: 'Diamond', emoji: '💎', bonusCards: 3, color: '#b9f2ff', next: null, needed: 0 };
+  if (gamesPlayed >= 7) return { name: 'Gold', emoji: '🥇', bonusCards: 2, color: '#ffd700', next: 'Diamond', needed: 10 - gamesPlayed };
+  if (gamesPlayed >= 4) return { name: 'Silver', emoji: '🥈', bonusCards: 1, color: '#c0c0c0', next: 'Gold', needed: 7 - gamesPlayed };
+  if (gamesPlayed >= 2) return { name: 'Bronze', emoji: '🥉', bonusCards: 0, color: '#cd7f32', next: 'Silver', needed: 4 - gamesPlayed };
+  return { name: 'New', emoji: '🆕', bonusCards: 0, color: '#888', next: 'Bronze', needed: 2 - gamesPlayed };
+}
+
+function recordGameParticipation(gameId) {
+  const game = games[gameId];
+  if (!game) return;
+  for (const [uid, player] of Object.entries(game.players)) {
+    if (!playerHistory[uid]) playerHistory[uid] = { gamesPlayed: 0, wins: 0, username: player.username };
+    playerHistory[uid].gamesPlayed++;
+    playerHistory[uid].username = player.username;
+    playerHistory[uid].lastGame = new Date().toISOString();
+    if (game.winners.some(w => w.discordId === uid)) playerHistory[uid].wins++;
+  }
+  saveHistory(playerHistory);
+}
+
 let games = loadGames();
 
 // Load all winner banners from assets/winner-banners/
@@ -59,7 +87,7 @@ function checkWin(grid,called,wc){const m=grid.map(r=>r.map(c=>isMarked(c,called
 
 // ─── Image: Cards (horizontal grid layout) ──────────────────────────────────
 
-function renderStackedCards(game, cards, totalCards) {
+function renderStackedCards(game, cards, totalCards, bonusCards = 0, tier = null, wins = 0) {
   const isCustom = game.mode === 'custom';
   const cellW = isCustom ? 100 : 70;
   const cellH = isCustom ? 42 : 52;
@@ -88,9 +116,33 @@ function renderStackedCards(game, cards, totalCards) {
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(safeName(game.name), w / 2, 22);
+
+  // Win crown badge (top-right area)
+  if (wins > 0) {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`W ${wins}x`, w - gap - 4, 22);
+    // Crown above the W
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText('crown', w - gap - 10, 10); // placeholder
+    // Actually draw a simple crown shape
+    const cx = w - gap - 18, cy = 8;
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.moveTo(cx - 12, cy + 10); ctx.lineTo(cx - 12, cy + 4); ctx.lineTo(cx - 8, cy + 7);
+    ctx.lineTo(cx - 4, cy); ctx.lineTo(cx, cy + 7); ctx.lineTo(cx + 4, cy);
+    ctx.lineTo(cx + 8, cy + 7); ctx.lineTo(cx + 12, cy + 4); ctx.lineTo(cx + 12, cy + 10);
+    ctx.closePath(); ctx.fill();
+  }
+
   ctx.fillStyle = '#666';
   ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
   ctx.fillText(`${game.id} · ${game.winCondition}`, w / 2, 38);
+
+  const tierColors = { Silver: '#c0c0c0', Gold: '#ffd700', Diamond: '#b9f2ff' };
+  const regularCount = totalCards - bonusCards;
 
   // Render cards in grid
   for (let i = 0; i < cards.length; i++) {
@@ -98,29 +150,48 @@ function renderStackedCards(game, cards, totalCards) {
     const row = Math.floor(i / cols);
     const offsetX = gap + col * (singleCardW + gap);
     const offsetY = titleH + gap + row * (singleCardH + gap);
+    const isBonus = i >= regularCount && tier && tierColors[tier.name];
+    const tierColor = isBonus ? tierColors[tier.name] : null;
 
-    // Card background
-    ctx.fillStyle = '#0e0e1c';
+    // Card background - tier cards get colored border
+    if (isBonus && tierColor) {
+      // Tier glow border
+      ctx.fillStyle = tierColor + '15';
+      ctx.beginPath(); ctx.roundRect(offsetX - 6, offsetY - 6, singleCardW + 12, singleCardH + 12, 10); ctx.fill();
+      ctx.strokeStyle = tierColor + '88'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(offsetX - 6, offsetY - 6, singleCardW + 12, singleCardH + 12, 10); ctx.stroke();
+    }
+
+    ctx.fillStyle = isBonus ? '#12101e' : '#0e0e1c';
     ctx.beginPath(); ctx.roundRect(offsetX - 4, offsetY - 4, singleCardW + 8, singleCardH + 8, 8); ctx.fill();
-    ctx.strokeStyle = '#2a2a3a'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = isBonus ? tierColor + '44' : '#2a2a3a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(offsetX - 4, offsetY - 4, singleCardW + 8, singleCardH + 8, 8); ctx.stroke();
 
-    renderSingleCardAt(ctx, game, cards[i], i + 1, totalCards, offsetX, offsetY, cellW, cellH, headerH, labelH, cardPadX, isCustom);
+    renderSingleCardAt(ctx, game, cards[i], i + 1, totalCards, offsetX, offsetY, cellW, cellH, headerH, labelH, cardPadX, isCustom, isBonus ? tier : null, tierColor);
   }
 
   return canvas.toBuffer('image/png');
 }
 
-function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW, cellH, headerH, labelH, padX, isCustom) {
+function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW, cellH, headerH, labelH, padX, isCustom, tier = null, tierColor = null) {
   const called = game.calledNumbers || [];
 
   // Label
-  ctx.fillStyle = '#aaaaaa';
-  ctx.font = 'bold 11px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText(`Card ${cardNum}/${totalCards}`, ox + padX, oy + 16);
+  if (tier && tierColor) {
+    // Tier badge label
+    ctx.fillStyle = tierColor;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${tier.emoji || '★'} ${tier.name} Bonus`, ox + padX, oy + 16);
+  } else {
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Card ${cardNum}/${totalCards}`, ox + padX, oy + 16);
+  }
   const markedCount = card.grid.flat().filter(c => isMarked(c, called)).length;
   ctx.textAlign = 'right';
-  ctx.fillStyle = '#666677';
+  ctx.fillStyle = tierColor || '#666677';
   ctx.font = '10px sans-serif';
   ctx.fillText(`${markedCount}/25`, ox + padX + cellW * 5, oy + 16);
 
@@ -291,20 +362,41 @@ client.on('interactionCreate', async (interaction) => {
     if (member.roles.cache.has(roleId)) cardCount += count;
   }
   if (cardCount === 0) return interaction.reply({ content: '❌ No qualifying role.', ephemeral: true });
-  if (cardCount > 10) cardCount = 10;
+
+  // LOYALTY: bonus cards based on games played
+  const history = playerHistory[userId] || { gamesPlayed: 0, wins: 0 };
+  const tier = getLoyaltyTier(history.gamesPlayed);
+  const bonusCards = tier.bonusCards;
+  cardCount += bonusCards;
+  if (cardCount > 15) cardCount = 15;
 
   const cards = [];
   for (let i = 0; i < cardCount; i++) cards.push({ id: String(i), grid: generateCard(game) });
-  game.players[userId] = { username: interaction.user.username, displayName: interaction.user.displayName || interaction.user.username, cards, joinedAt: new Date().toISOString() };
+  game.players[userId] = { username: interaction.user.username, displayName: interaction.user.displayName || interaction.user.username, cards, joinedAt: new Date().toISOString(), tierName: tier.name, tierEmoji: tier.emoji, bonusCards, wins: history.wins || 0 };
   saveGames();
+
+  // Build personalized DM message
+  let dmMsg = `🎱 **${game.name}** — You have **${cardCount} card(s)**!`;
+  if (bonusCards > 0) dmMsg += `\n${tier.emoji} **${tier.name} tier** bonus: +${bonusCards} extra card${bonusCards > 1 ? 's' : ''}!`;
+  if (history.gamesPlayed === 0) {
+    dmMsg += `\n\n🆕 Welcome to your first bingo game! Play more to unlock bonus cards.`;
+    dmMsg += `\n📈 **2 more games** to reach Bronze tier.`;
+  } else {
+    dmMsg += `\n\n${tier.emoji} This is your **game #${history.gamesPlayed + 1}**!`;
+    if (history.wins > 0) dmMsg += ` You've won **${history.wins}** time${history.wins > 1 ? 's' : ''}!`;
+    if (tier.next) dmMsg += `\n📈 **${tier.needed} more game${tier.needed > 1 ? 's' : ''}** to reach ${tier.next} tier${tier.next === 'Silver' ? ' (+1 bonus card)' : tier.next === 'Gold' ? ' (+2 bonus cards)' : tier.next === 'Diamond' ? ' (+3 bonus cards)' : ''}.`;
+  }
+  dmMsg += `\nNumbers on your cards will be highlighted as they're called.`;
 
   try {
     const user = await client.users.fetch(userId);
-    // Send ALL cards as one stacked image
-    const img = renderStackedCards(game, cards, cardCount);
+    const img = renderStackedCards(game, cards, cardCount, bonusCards, tier, history.wins || 0);
     const att = new AttachmentBuilder(img, { name: 'bingo-cards.png' });
-    await user.send({ content: `🎱 **${game.name}** — You have **${cardCount} card(s)**!\nNumbers that appear on your cards will be highlighted as they're called.`, files: [att] });
-    await interaction.reply({ content: `🎰 You got **${cardCount} card(s)**! Check DMs.`, ephemeral: true });
+    await user.send({ content: dmMsg, files: [att] });
+    const replyMsg = bonusCards > 0
+      ? `🎰 You got **${cardCount} card(s)** (${bonusCards} bonus from ${tier.emoji} ${tier.name} tier)! Check DMs.`
+      : `🎰 You got **${cardCount} card(s)**! Check DMs.`;
+    await interaction.reply({ content: replyMsg, ephemeral: true });
   } catch { await interaction.reply({ content: '❌ Couldn\'t DM you. Open your DMs!', ephemeral: true }); }
 });
 
@@ -357,7 +449,8 @@ async function sendAffectedCards(game, item) {
     try {
       const user = await client.users.fetch(userId);
       // Send ALL their cards (not just affected ones) so they see full state
-      const img = renderStackedCards(game, player.cards, player.cards.length);
+      const tierObj = player.tierName ? { name: player.tierName, emoji: player.tierEmoji } : null;
+      const img = renderStackedCards(game, player.cards, player.cards.length, player.bonusCards || 0, tierObj, player.wins || 0);
       const att = new AttachmentBuilder(img, { name: 'bingo-cards.png' });
       await user.send({ content: `📢 **${ntc(item)}** called! You have it!`, files: [att] });
     } catch {}
@@ -506,7 +599,7 @@ app.post('/api/games/:id/call', auth, async (req, res) => {
   res.json({ item, display: ntc(item), calledCount: game.calledNumbers.length, total: isCustom ? game.itemPool.length : 75, newWinners, totalWinners: game.winners.length });
 });
 
-app.post('/api/games/:id/end', auth, (req, res) => { const g = games[req.params.id]; if (!g) return res.status(404).json({ error: 'Not found' }); g.status = 'ended'; g.endedAt = new Date().toISOString(); saveGames(); res.json({ ok: true, winners: g.winners }); });
+app.post('/api/games/:id/end', auth, (req, res) => { const g = games[req.params.id]; if (!g) return res.status(404).json({ error: 'Not found' }); g.status = 'ended'; g.endedAt = new Date().toISOString(); recordGameParticipation(req.params.id); saveGames(); res.json({ ok: true, winners: g.winners }); });
 
 app.get('/api/guilds', auth, async (_, res) => {
   const guilds = []; for (const guild of client.guilds.cache.values()) { const channels = guild.channels.cache.filter(c => c.isTextBased() && !c.isThread()).map(c => ({ id: c.id, name: c.name })); guilds.push({ id: guild.id, name: guild.name, channels }); } res.json(guilds);
