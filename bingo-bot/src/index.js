@@ -29,23 +29,32 @@ function loadHistory() { ensureDataDir(); if (!existsSync(HISTORY_FILE)) return 
 function saveHistory(h) { ensureDataDir(); writeFileSync(HISTORY_FILE, JSON.stringify(h, null, 2)); }
 let playerHistory = loadHistory(); // { odiscordId: { gamesPlayed: N, wins: N, lastGame: date } }
 
-function getLoyaltyTier(gamesPlayed) {
-  if (gamesPlayed >= 10) return { name: 'Diamond', emoji: '💎', bonusCards: 3, color: '#b9f2ff', next: null, needed: 0 };
-  if (gamesPlayed >= 7) return { name: 'Gold', emoji: '🥇', bonusCards: 2, color: '#ffd700', next: 'Diamond', needed: 10 - gamesPlayed };
-  if (gamesPlayed >= 4) return { name: 'Silver', emoji: '🥈', bonusCards: 1, color: '#c0c0c0', next: 'Gold', needed: 7 - gamesPlayed };
-  if (gamesPlayed >= 2) return { name: 'Bronze', emoji: '🥉', bonusCards: 0, color: '#cd7f32', next: 'Silver', needed: 4 - gamesPlayed };
-  return { name: 'New', emoji: '🆕', bonusCards: 0, color: '#888', next: 'Bronze', needed: 2 - gamesPlayed };
+function getLoyaltyTier(streak) {
+  if (streak >= 20) return { name: 'Diamond', emoji: '💎', bonusCards: 3, freeSpaces: 4, color: '#b9f2ff', next: null, needed: 0 };
+  if (streak >= 15) return { name: 'Diamond', emoji: '💎', bonusCards: 2, freeSpaces: 4, color: '#b9f2ff', next: null, needed: 20 - streak };
+  if (streak >= 10) return { name: 'Diamond', emoji: '💎', bonusCards: 1, freeSpaces: 4, color: '#b9f2ff', next: null, needed: 15 - streak };
+  if (streak >= 7) return { name: 'Gold', emoji: '🥇', bonusCards: 1, freeSpaces: 3, color: '#ffd700', next: 'Diamond', needed: 10 - streak };
+  if (streak >= 4) return { name: 'Silver', emoji: '🥈', bonusCards: 1, freeSpaces: 2, color: '#c0c0c0', next: 'Gold', needed: 7 - streak };
+  if (streak >= 2) return { name: 'Bronze', emoji: '🥉', bonusCards: 0, freeSpaces: 0, color: '#cd7f32', next: 'Silver', needed: 4 - streak };
+  return { name: 'New', emoji: '🆕', bonusCards: 0, freeSpaces: 0, color: '#888', next: 'Bronze', needed: 2 - streak };
 }
 
 function recordGameParticipation(gameId) {
   const game = games[gameId];
   if (!game) return;
+  const participants = new Set(Object.keys(game.players));
+  // Reset streak for known players who missed this game
+  for (const [uid, hist] of Object.entries(playerHistory)) {
+    if (!participants.has(uid)) { hist.streak = 0; }
+  }
+  // Update participants
   for (const [uid, player] of Object.entries(game.players)) {
-    if (!playerHistory[uid]) playerHistory[uid] = { gamesPlayed: 0, wins: 0, username: player.username };
-    playerHistory[uid].gamesPlayed++;
+    if (!playerHistory[uid]) playerHistory[uid] = { gamesPlayed: 0, wins: 0, streak: 0, username: player.username };
+    playerHistory[uid].streak = (playerHistory[uid].streak || 0) + 1;
+    playerHistory[uid].gamesPlayed = (playerHistory[uid].gamesPlayed || 0) + 1;
     playerHistory[uid].username = player.username;
     playerHistory[uid].lastGame = new Date().toISOString();
-    if (game.winners.some(w => w.discordId === uid)) playerHistory[uid].wins++;
+    if (game.winners.some(w => w.discordId === uid)) playerHistory[uid].wins = (playerHistory[uid].wins || 0) + 1;
   }
   saveHistory(playerHistory);
 }
@@ -79,7 +88,34 @@ function generateClassicCard(){const grid=[];for(let c=0;c<5;c++){const{min,max}
 function generateCustomCard(pool){const p=shuffle(pool).slice(0,24);const grid=[];let i=0;for(let r=0;r<5;r++){grid[r]=[];for(let c=0;c<5;c++){grid[r][c]=(r===2&&c===2)?'FREE':p[i++];}}return grid;}
 function generateCard(game){return game.mode==='custom'?generateCustomCard(game.itemPool):generateClassicCard();}
 
-function isMarked(cell,called){return cell==='FREE'||called.includes(cell);}
+function isMarked(cell,called){return cell==='FREE'||cell==='STAR'||called.includes(cell);}
+
+// Generate a bonus card with extra FREE spaces
+function generateBonusCard(game, extraFreeCount) {
+  const grid = game.mode === 'custom' ? generateCustomCard(game.itemPool) : generateClassicCard();
+  // Add extra FREE spaces in random non-center positions
+  const positions = [];
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (!(r === 2 && c === 2)) positions.push([r, c]);
+  const shuffled = shuffle(positions);
+  for (let i = 0; i < Math.min(extraFreeCount, shuffled.length); i++) {
+    grid[shuffled[i][0]][shuffled[i][1]] = 'FREE';
+  }
+  return grid;
+}
+
+// 4% chance to make a card a star card (one random cell pre-marked)
+function maybeStarCard(grid) {
+  if (Math.random() > 0.04) return { grid, isStar: false, starCell: null };
+  const candidates = [];
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+    if (grid[r][c] !== 'FREE' && grid[r][c] !== 'STAR') candidates.push([r, c]);
+  }
+  if (candidates.length === 0) return { grid, isStar: false, starCell: null };
+  const [sr, sc] = candidates[Math.floor(Math.random() * candidates.length)];
+  const starValue = grid[sr][sc];
+  grid[sr][sc] = 'STAR';
+  return { grid, isStar: true, starCell: starValue };
+}
 function checkWin(grid,called,wc){const m=grid.map(r=>r.map(c=>isMarked(c,called)));
   if(wc==='line'){for(let r=0;r<5;r++)if(m[r].every(Boolean))return true;for(let c=0;c<5;c++)if(m.every(r=>r[c]))return true;if([0,1,2,3,4].every(i=>m[i][i]))return true;if([0,1,2,3,4].every(i=>m[i][4-i]))return true;return false;}
   if(wc==='blackout')return m.every(r=>r.every(Boolean));if(wc==='four_corners')return m[0][0]&&m[0][4]&&m[4][0]&&m[4][4];
@@ -141,8 +177,7 @@ function renderStackedCards(game, cards, totalCards, bonusCards = 0, tier = null
   ctx.textAlign = 'center';
   ctx.fillText(`${game.id} · ${game.winCondition}`, w / 2, 38);
 
-  const tierColors = { Silver: '#c0c0c0', Gold: '#ffd700', Diamond: '#b9f2ff' };
-  const regularCount = totalCards - bonusCards;
+  const tierColors = { bronze: '#cd7f32', silver: '#c0c0c0', gold: '#ffd700', diamond: '#b9f2ff' };
 
   // Render cards in grid
   for (let i = 0; i < cards.length; i++) {
@@ -150,39 +185,54 @@ function renderStackedCards(game, cards, totalCards, bonusCards = 0, tier = null
     const row = Math.floor(i / cols);
     const offsetX = gap + col * (singleCardW + gap);
     const offsetY = titleH + gap + row * (singleCardH + gap);
-    const isBonus = i >= regularCount && tier && tierColors[tier.name];
-    const tierColor = isBonus ? tierColors[tier.name] : null;
+    const cardType = cards[i].cardType || 'regular';
+    const isSpecial = cardType !== 'regular';
+    const tierColor = tierColors[cardType] || null;
 
-    // Card background - tier cards get colored border
-    if (isBonus && tierColor) {
-      // Tier glow border
+    // Card background - special cards get colored border
+    if (isSpecial && tierColor) {
       ctx.fillStyle = tierColor + '15';
       ctx.beginPath(); ctx.roundRect(offsetX - 6, offsetY - 6, singleCardW + 12, singleCardH + 12, 10); ctx.fill();
       ctx.strokeStyle = tierColor + '88'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(offsetX - 6, offsetY - 6, singleCardW + 12, singleCardH + 12, 10); ctx.stroke();
     }
 
-    ctx.fillStyle = isBonus ? '#12101e' : '#0e0e1c';
+    // Star card gets a subtle star pattern overlay
+    if (cards[i].isStar) {
+      ctx.strokeStyle = '#ffd70044'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(offsetX - 6, offsetY - 6, singleCardW + 12, singleCardH + 12, 10); ctx.stroke();
+    }
+
+    ctx.fillStyle = isSpecial ? '#12101e' : '#0e0e1c';
     ctx.beginPath(); ctx.roundRect(offsetX - 4, offsetY - 4, singleCardW + 8, singleCardH + 8, 8); ctx.fill();
-    ctx.strokeStyle = isBonus ? tierColor + '44' : '#2a2a3a'; ctx.lineWidth = 1;
+    ctx.strokeStyle = isSpecial ? (tierColor || '#ffd700') + '44' : '#2a2a3a'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(offsetX - 4, offsetY - 4, singleCardW + 8, singleCardH + 8, 8); ctx.stroke();
 
-    renderSingleCardAt(ctx, game, cards[i], i + 1, totalCards, offsetX, offsetY, cellW, cellH, headerH, labelH, cardPadX, isCustom, isBonus ? tier : null, tierColor);
+    renderSingleCardAt(ctx, game, cards[i], i + 1, totalCards, offsetX, offsetY, cellW, cellH, headerH, labelH, cardPadX, isCustom, cardType === 'regular' ? null : { name: cardType, emoji: cardType === 'bronze' ? '🥉' : cardType === 'silver' ? '🥈' : cardType === 'gold' ? '🥇' : cardType === 'diamond' ? '💎' : '★' }, tierColor, cards[i].isStar);
   }
 
   return canvas.toBuffer('image/png');
 }
 
-function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW, cellH, headerH, labelH, padX, isCustom, tier = null, tierColor = null) {
+function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW, cellH, headerH, labelH, padX, isCustom, tier = null, tierColor = null, isStar = false) {
   const called = game.calledNumbers || [];
 
   // Label
-  if (tier && tierColor) {
-    // Tier badge label
+  if (isStar && tier) {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`★ Star ${tier.name.charAt(0).toUpperCase() + tier.name.slice(1)}`, ox + padX, oy + 16);
+  } else if (isStar) {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`★ Star Card`, ox + padX, oy + 16);
+  } else if (tier && tierColor) {
     ctx.fillStyle = tierColor;
     ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(`${tier.emoji || '★'} ${tier.name} Bonus`, ox + padX, oy + 16);
+    ctx.fillText(`${tier.emoji || '★'} ${tier.name.charAt(0).toUpperCase() + tier.name.slice(1)} Tier`, ox + padX, oy + 16);
   } else {
     ctx.fillStyle = '#aaaaaa';
     ctx.font = 'bold 11px sans-serif';
@@ -191,7 +241,7 @@ function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW,
   }
   const markedCount = card.grid.flat().filter(c => isMarked(c, called)).length;
   ctx.textAlign = 'right';
-  ctx.fillStyle = tierColor || '#666677';
+  ctx.fillStyle = tierColor || (isStar ? '#ffd700' : '#666677');
   ctx.font = '10px sans-serif';
   ctx.fillText(`${markedCount}/25`, ox + padX + cellW * 5, oy + 16);
 
@@ -214,14 +264,16 @@ function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW,
       const marked = isMarked(val, called);
       const ci = (!isCustom && typeof val === 'number') ? colFor(val) : null;
 
-      ctx.fillStyle = val === 'FREE' ? '#3d2a5c' : marked ? (ci ? ci.color : '#ff6b35') : '#16162a';
+      ctx.fillStyle = val === 'FREE' ? '#3d2a5c' : val === 'STAR' ? '#4a3a10' : marked ? (ci ? ci.color : '#ff6b35') : '#16162a';
       ctx.beginPath(); ctx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 5); ctx.fill();
-      ctx.strokeStyle = marked ? 'transparent' : '#2a2a3a'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.strokeStyle = val === 'STAR' ? '#ffd70066' : (marked ? 'transparent' : '#2a2a3a'); ctx.lineWidth = val === 'STAR' ? 2 : 1; ctx.stroke();
 
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       if (val === 'FREE') {
         ctx.strokeStyle = '#ffd70066'; ctx.lineWidth = 2; ctx.stroke();
         ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px sans-serif'; ctx.fillText('★ FREE', x + cellW/2, y + cellH/2);
+      } else if (val === 'STAR') {
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px sans-serif'; ctx.fillText('★', x + cellW/2, y + cellH/2);
       }
       else if (marked) { ctx.fillStyle = '#fff'; ctx.font = `bold ${isCustom?9:18}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,12):String(val), x+cellW/2, y+cellH/2); }
       else { ctx.fillStyle = '#666677'; ctx.font = `${isCustom?9:15}px sans-serif`; ctx.fillText(isCustom?String(val).slice(0,12):String(val), x+cellW/2, y+cellH/2); }
@@ -364,27 +416,47 @@ client.on('interactionCreate', async (interaction) => {
   if (cardCount === 0) return interaction.reply({ content: '❌ No qualifying role.', ephemeral: true });
 
   // LOYALTY: bonus cards based on games played
-  const history = playerHistory[userId] || { gamesPlayed: 0, wins: 0 };
-  const tier = getLoyaltyTier(history.gamesPlayed);
+  const history = playerHistory[userId] || { gamesPlayed: 0, wins: 0, streak: 0 };
+  const tier = getLoyaltyTier(history.streak || 0);
   const bonusCards = tier.bonusCards;
   cardCount += bonusCards;
   if (cardCount > 15) cardCount = 15;
+  const regularCount = cardCount - bonusCards;
 
   const cards = [];
-  for (let i = 0; i < cardCount; i++) cards.push({ id: String(i), grid: generateCard(game) });
-  game.players[userId] = { username: interaction.user.username, displayName: interaction.user.displayName || interaction.user.username, cards, joinedAt: new Date().toISOString(), tierName: tier.name, tierEmoji: tier.emoji, bonusCards, wins: history.wins || 0 };
+  let hasStar = false;
+  // Generate regular cards
+  for (let i = 0; i < regularCount; i++) {
+    const grid = generateCard(game);
+    const star = maybeStarCard(grid);
+    const isBronze = (tier.name === 'Bronze' && i === 0); // first card gets bronze styling
+    cards.push({ id: String(i), grid: star.grid, isStar: star.isStar, starCell: star.starCell, cardType: isBronze ? 'bronze' : 'regular' });
+    if (star.isStar) hasStar = true;
+  }
+  // Generate bonus cards with extra FREE spaces
+  for (let i = 0; i < bonusCards; i++) {
+    const grid = generateBonusCard(game, tier.freeSpaces);
+    const star = maybeStarCard(grid);
+    cards.push({ id: String(regularCount + i), grid: star.grid, isStar: star.isStar, starCell: star.starCell, cardType: tier.name.toLowerCase() });
+    if (star.isStar) hasStar = true;
+  }
+
+  game.players[userId] = { username: interaction.user.username, displayName: interaction.user.displayName || interaction.user.username, cards, joinedAt: new Date().toISOString(), tierName: tier.name, tierEmoji: tier.emoji, bonusCards, wins: history.wins || 0, hasStar, streak: history.streak || 0 };
   saveGames();
 
   // Build personalized DM message
   let dmMsg = `🎱 **${game.name}** — You have **${cardCount} card(s)**!`;
-  if (bonusCards > 0) dmMsg += `\n${tier.emoji} **${tier.name} tier** bonus: +${bonusCards} extra card${bonusCards > 1 ? 's' : ''}!`;
+  if (bonusCards > 0) dmMsg += `\n${tier.emoji} **${tier.name} tier** bonus: +${bonusCards} card${bonusCards > 1 ? 's' : ''} with ${tier.freeSpaces} free spaces!`;
+  if (hasStar) dmMsg += `\n⭐ You got a **Star Card**! One cell is pre-marked — lucky you!`;
   if (history.gamesPlayed === 0) {
     dmMsg += `\n\n🆕 Welcome to your first bingo game! Play more to unlock bonus cards.`;
     dmMsg += `\n📈 **2 more games** to reach Bronze tier.`;
   } else {
-    dmMsg += `\n\n${tier.emoji} This is your **game #${history.gamesPlayed + 1}**!`;
-    if (history.wins > 0) dmMsg += ` You've won **${history.wins}** time${history.wins > 1 ? 's' : ''}!`;
-    if (tier.next) dmMsg += `\n📈 **${tier.needed} more game${tier.needed > 1 ? 's' : ''}** to reach ${tier.next} tier${tier.next === 'Silver' ? ' (+1 bonus card)' : tier.next === 'Gold' ? ' (+2 bonus cards)' : tier.next === 'Diamond' ? ' (+3 bonus cards)' : ''}.`;
+    const streak = (history.streak || 0);
+    dmMsg += `\n\n${tier.emoji} **Game #${(history.gamesPlayed || 0) + 1}** · 🔥 **${streak}-game streak!**`;
+    if (history.wins > 0) dmMsg += ` · ${history.wins} win${history.wins > 1 ? 's' : ''}`;
+    if (tier.next) dmMsg += `\n📈 **${tier.needed} more game${tier.needed > 1 ? 's' : ''} streak** to reach ${tier.next}.`;
+    dmMsg += `\n⚠️ Miss a game and your streak resets!`;
   }
   dmMsg += `\nNumbers on your cards will be highlighted as they're called.`;
 
@@ -534,7 +606,9 @@ app.get('/api/games/:id/display', (req, res) => {
       progress: bestProgress, total: bestTotal, label: bestLabel,
       marks: bestMarks, cards: p.cards.length,
       isWinner: g.winners.some(w => w.discordId === uid),
-      // Send best card grid for top players (hover preview)
+      hasStar: p.hasStar || p.cards.some(c => c.isStar),
+      tierName: p.tierName || 'New',
+      streak: p.streak || 0,
       bestCard: p.cards[bestCardIdx]?.grid || null,
     };
   }).sort((a, b) => {

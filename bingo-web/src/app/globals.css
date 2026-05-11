@@ -40,8 +40,11 @@ input:focus,select:focus{border-color:var(--accent)}
 @keyframes gradient-shift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 .display-subtitle{font-family:'Space Mono',monospace;font-size:0.85rem;color:var(--text-dim);margin-top:0.25rem}
 .display-body{display:flex;gap:2rem;padding:1rem 2rem 2rem;height:calc(100vh - 120px)}
-.display-caller{flex:0 0 clamp(280px,30vw,340px);display:flex;flex-direction:column;align-items:center;gap:1.5rem;overflow-y:auto}
-.ball{width:clamp(180px,22vw,260px);aspect-ratio:1;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;position:relative;box-shadow:inset 0 -10px 30px #00000044,inset 0 10px 20px #ffffff22;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1)}
+.display-caller{flex:0 0 clamp(280px,30vw,340px);display:flex;flex-direction:column;align-items:center;gap:1rem;overflow:visible}
+.caller-top{display:flex;flex-direction:column;align-items:center;gap:1rem;flex-shrink:0}
+.caller-scroll{width:100%;overflow-y:auto;overflow-x:hidden;flex:1;display:flex;flex-direction:column;align-items:center;gap:0.75rem;padding-right:4px}
+.caller-scroll::-webkit-scrollbar{width:4px}.caller-scroll::-webkit-scrollbar-track{background:transparent}.caller-scroll::-webkit-scrollbar-thumb{background:#2a2a3a;border-radius:2px}
+.ball{width:clamp(180px,22vw,260px);aspect-ratio:1;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;position:relative;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1)}
 .ball::before{content:'';position:absolute;width:70%;height:20%;top:50%;left:50%;transform:translate(-50%,-50%);background:radial-gradient(ellipse,#ffffffee,#ffffffcc);border-radius:50%}
 .ball.new{animation:ball-drop 0.7s cubic-bezier(0.34,1.56,0.64,1)}
 @keyframes ball-drop{0%{transform:translateY(-100px) scale(0.5);opacity:0}60%{transform:translateY(10px) scale(1.05);opacity:1}100%{transform:translateY(0) scale(1);opacity:1}}
