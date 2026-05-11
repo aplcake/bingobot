@@ -33,9 +33,11 @@ function getLoyaltyTier(streak) {
   if (streak >= 20) return { name: 'Diamond', emoji: '💎', bonusCards: 3, freeSpaces: 4, color: '#b9f2ff', next: null, needed: 0 };
   if (streak >= 15) return { name: 'Diamond', emoji: '💎', bonusCards: 2, freeSpaces: 4, color: '#b9f2ff', next: null, needed: 20 - streak };
   if (streak >= 10) return { name: 'Diamond', emoji: '💎', bonusCards: 1, freeSpaces: 4, color: '#b9f2ff', next: null, needed: 15 - streak };
-  if (streak >= 7) return { name: 'Gold', emoji: '🥇', bonusCards: 1, freeSpaces: 3, color: '#ffd700', next: 'Diamond', needed: 10 - streak };
-  if (streak >= 4) return { name: 'Silver', emoji: '🥈', bonusCards: 1, freeSpaces: 2, color: '#c0c0c0', next: 'Gold', needed: 7 - streak };
-  if (streak >= 2) return { name: 'Bronze', emoji: '🥉', bonusCards: 0, freeSpaces: 0, color: '#cd7f32', next: 'Silver', needed: 4 - streak };
+  if (streak >= 6) return { name: 'Gold', emoji: '🥇', bonusCards: 2, freeSpaces: 3, color: '#ffd700', next: 'Diamond', needed: 10 - streak };
+  if (streak >= 5) return { name: 'Gold', emoji: '🥇', bonusCards: 1, freeSpaces: 3, color: '#ffd700', next: 'Gold II', needed: 6 - streak };
+  if (streak >= 4) return { name: 'Silver', emoji: '🥈', bonusCards: 2, freeSpaces: 2, color: '#c0c0c0', next: 'Gold', needed: 5 - streak };
+  if (streak >= 3) return { name: 'Silver', emoji: '🥈', bonusCards: 1, freeSpaces: 2, color: '#c0c0c0', next: 'Silver II', needed: 4 - streak };
+  if (streak >= 2) return { name: 'Bronze', emoji: '🥉', bonusCards: 0, freeSpaces: 0, color: '#cd7f32', next: 'Silver', needed: 3 - streak };
   return { name: 'New', emoji: '🆕', bonusCards: 0, freeSpaces: 0, color: '#888', next: 'Bronze', needed: 2 - streak };
 }
 
@@ -536,6 +538,19 @@ app.use(express.json({ limit: '1mb' }));
 function auth(req, res, next) { if (req.headers['x-api-key'] !== API_KEY) return res.status(401).json({ error: 'Unauthorized' }); next(); }
 
 app.get('/api/health', (_, res) => res.json({ ok: true, games: Object.keys(games).length }));
+
+// Player streak leaderboard
+app.get('/api/players/streaks', auth, (_, res) => {
+  const list = Object.entries(playerHistory)
+    .filter(([_, h]) => (h.streak || 0) >= 1)
+    .map(([uid, h]) => ({
+      discordId: uid, username: h.username, streak: h.streak || 0,
+      gamesPlayed: h.gamesPlayed || 0, wins: h.wins || 0,
+      tier: getLoyaltyTier(h.streak || 0).name, emoji: getLoyaltyTier(h.streak || 0).emoji,
+    }))
+    .sort((a, b) => b.streak - a.streak);
+  res.json(list);
+});
 
 app.get('/api/games', auth, (_, res) => {
   const list = Object.values(games).map(g => ({ id: g.id, name: g.name, status: g.status, mode: g.mode || 'classic', playerCount: Object.keys(g.players).length, calledCount: g.calledNumbers.length, totalItems: g.mode === 'custom' ? g.itemPool.length : 75, winCondition: g.winCondition, winnerCount: g.winners.length, winners: g.winners, createdAt: g.createdAt }));

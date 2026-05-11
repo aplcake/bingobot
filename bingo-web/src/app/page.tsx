@@ -24,14 +24,16 @@ export default function AdminPage(){
   const[nn,setNn]=useState('');const[nw,setNw]=useState('line');const[nm,setNm]=useState<'classic'|'custom'>('classic');const[ni,setNi]=useState('');
   const[sg,setSg]=useState('');const[sc,setSc]=useState('');const[ri,setRi]=useState('');const[rc,setRc]=useState('1');
   const[jc,setJc]=useState<any>(null);const[ld,setLd]=useState(false);const[hg,setHg]=useState<Game|null>(null);
+  const[streaks,setStreaks]=useState<any[]>([]);
 
   const fg=useCallback(async()=>{try{const r=await fetch(`${API}/api/games`,{headers:H});if(r.ok){setGames(await r.json());setConn(true);}}catch{setConn(false);}},[]);
   const fgi=useCallback(async(id:string)=>{try{const r=await fetch(`${API}/api/games/${id}`,{headers:H});if(r.ok)setAg(await r.json());}catch{}},[]);
   const fgu=useCallback(async()=>{try{const r=await fetch(`${API}/api/guilds`,{headers:H});if(r.ok)setGuilds(await r.json());}catch{}},[]);
   const fr=useCallback(async(gid:string)=>{try{const r=await fetch(`${API}/api/guilds/${gid}/roles`,{headers:H});if(r.ok)setRoles(await r.json());}catch{}},[]);
+  const fst=useCallback(async()=>{try{const r=await fetch(`${API}/api/players/streaks`,{headers:H});if(r.ok)setStreaks(await r.json());}catch{}},[]);
 
   useEffect(()=>{if(typeof window!=='undefined'&&sessionStorage.getItem('bingo_auth')==='1')setAuthed(true);},[]);
-  useEffect(()=>{if(authed){fg();fgu();}},[fg,fgu,authed]);
+  useEffect(()=>{if(authed){fg();fgu();fst();}},[fg,fgu,fst,authed]);
   useEffect(()=>{if(!ag||ag.status==='ended')return;const i=setInterval(()=>fgi(ag.id),3000);return()=>clearInterval(i);},[ag,fgi]);
   useEffect(()=>{if(sg)fr(sg);},[sg,fr]);
   useEffect(()=>{if(guilds.length>0&&!sg)setSg(guilds[0].id);},[guilds,sg]);
@@ -89,6 +91,21 @@ export default function AdminPage(){
       {active.length===0&&<p style={{color:'var(--text-dim)'}}>No active games. Create one!</p>}
       {active.map(g=><div key={g.id} className="game-list-item" onClick={()=>sel(g)}><div className="name">{g.mode==='custom'?'🎨':'🔢'} {g.name}</div><span className={`tag tag-${g.status}`}>{g.status}</span><div className="meta">{g.playerCount}p · {g.calledCount}/{g.totalItems}</div><button className="btn btn-red btn-sm" onClick={e=>{e.stopPropagation();del(g.id);}}>✕</button></div>)}
       {ended.length>0&&<><h2 style={{marginTop:'1.5rem'}}>📜 Recent</h2>{ended.slice(0,5).map(g=><div key={g.id} className="game-list-item" onClick={()=>sel(g)} style={{opacity:0.7}}><div className="name">{g.mode==='custom'?'🎨':'🔢'} {g.name}</div><span className="tag tag-ended">ended</span><div className="meta">🏆{g.winnerCount} · {g.playerCount}p · {ago(g.createdAt)}</div><button className="btn btn-red btn-sm" onClick={e=>{e.stopPropagation();del(g.id);}}>✕</button></div>)}</>}
+
+      {streaks.length>0&&<><h2 style={{marginTop:'1.5rem'}}>🔥 Player Streaks</h2>
+        <div style={{maxHeight:'300px',overflow:'auto'}}>
+        {streaks.map((p:any,i:number)=>{
+          const tc:Record<string,string>={Diamond:'#b9f2ff',Gold:'#ffd700',Silver:'#c0c0c0',Bronze:'#cd7f32',New:'#888'};
+          const c=tc[p.tier]||'#888';
+          return<div key={p.discordId} className="role-row" style={{border:`1px solid ${c}22`}}>
+            <span style={{fontFamily:"'Space Mono',monospace",fontSize:'0.8rem',fontWeight:900,color:c,minWidth:'1.5rem'}}>{i+1}</span>
+            <span className="name" style={{color:i<3?c:'var(--text)'}}>{p.emoji} {p.username}</span>
+            <span style={{fontSize:'0.7rem',color:'#ff6b35',fontFamily:"'Space Mono',monospace"}}>🔥{p.streak}</span>
+            <span style={{fontSize:'0.7rem',color:'var(--text-dim)',fontFamily:"'Space Mono',monospace"}}>{p.gamesPlayed}g</span>
+            {p.wins>0&&<span style={{fontSize:'0.7rem',color:'var(--gold)',fontFamily:"'Space Mono',monospace"}}>🏆{p.wins}</span>}
+            <span className="count" style={{color:c}}>{p.tier}</span>
+          </div>;})}
+        </div></>}
     </div>}
 
     {/* CREATE */}

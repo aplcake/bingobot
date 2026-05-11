@@ -169,26 +169,26 @@ export default function DisplayPage(){
                 const pct=Math.round((p.progress/p.total)*100);const need=p.total-p.progress;
                 const isTop=i<3&&!p.isWinner;const barColor=p.isWinner?'#ffd700':i===0?'#00ff88':i===1?'#00e5ff':i===2?'#ff6b35':'#666';
                 return<div key={i} onClick={()=>p.bestCard&&setHoverIdx(hoverIdx===i?null:i)} style={{
-                  padding:i<3?'0.6rem 0.75rem':'0.4rem 0.75rem',borderRadius:'10px',position:'relative',overflow:'hidden',cursor:p.bestCard?'pointer':'default',
+                  padding:i<3?'0.85rem 1rem':'0.65rem 1rem',borderRadius:'12px',position:'relative',overflow:'hidden',cursor:p.bestCard?'pointer':'default',
                   background:p.isWinner?'#ffd70010':isTop?'#ffffff0a':'#ffffff05',border:`1px solid ${p.isWinner?'#ffd70044':isTop?barColor+'30':'#ffffff0a'}`,transition:'all 0.3s ease',
                 }}>
-                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${pct}%`,background:`linear-gradient(90deg,${barColor}20,${barColor}10)`,borderRadius:'10px',transition:'width 1s cubic-bezier(0.25,1,0.5,1)'}}/>
-                  <div style={{position:'relative',display:'flex',alignItems:'center',gap:'0.6rem'}}>
-                    <div style={{minWidth:i<3?'2rem':'1.5rem',height:i<3?'2rem':'1.5rem',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',background:p.isWinner?'#ffd700':isTop?barColor+'22':'transparent',border:`1.5px solid ${p.isWinner?'#ffd700':isTop?barColor:'#333'}`}}>
-                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:i<3?'0.85rem':'0.7rem',fontWeight:900,color:p.isWinner?'#000':barColor}}>{p.isWinner?'W':i+1}</span>
+                  <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${pct}%`,background:`linear-gradient(90deg,${barColor}20,${barColor}10)`,borderRadius:'12px',transition:'width 1s cubic-bezier(0.25,1,0.5,1)'}}/>
+                  <div style={{position:'relative',display:'flex',alignItems:'center',gap:'0.75rem'}}>
+                    <div style={{minWidth:i<3?'2.4rem':'2rem',height:i<3?'2.4rem':'2rem',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',background:p.isWinner?'#ffd700':isTop?barColor+'22':'transparent',border:`2px solid ${p.isWinner?'#ffd700':isTop?barColor:'#333'}`}}>
+                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:i<3?'1rem':'0.85rem',fontWeight:900,color:p.isWinner?'#000':barColor}}>{p.isWinner?'W':i+1}</span>
                     </div>
-                    <span style={{fontSize:i<3?'0.95rem':'0.78rem',fontWeight:i<3?700:500,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:p.isWinner?'#ffd700':i<3?'#fff':'#aaa'}}>
+                    <span style={{fontSize:i<3?'1.1rem':'0.9rem',fontWeight:i<3?700:500,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:p.isWinner?'#ffd700':i<3?'#fff':'#aaa'}}>
                       {p.displayName}
                       {p.hasStar&&<span title="Has a Star Card" style={{color:'#ffd700',marginLeft:'0.3rem'}}>★</span>}
-                      {(p.streak||0)>=2&&<span style={{fontSize:'0.55rem',color:'#ff6b35',marginLeft:'0.2rem'}}>🔥{p.streak}</span>}
-                      <span style={{fontSize:'0.6rem',color:'#555',fontWeight:400,marginLeft:'0.3rem'}}>{p.cards}c</span>
+                      {(p.streak||0)>=2&&<span style={{fontSize:'0.65rem',color:'#ff6b35',marginLeft:'0.2rem'}}>🔥{p.streak}</span>}
+                      <span style={{fontSize:'0.7rem',color:'#555',fontWeight:400,marginLeft:'0.3rem'}}>{p.cards}c</span>
                     </span>
-                    <div style={{display:'flex',alignItems:'center',gap:'0.4rem',flexShrink:0}}>
-                      {!p.isWinner&&need>0&&<span style={{fontSize:'0.6rem',color:'#555',fontFamily:"'Space Mono',monospace"}}>{need} away</span>}
-                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:i<3?'0.8rem':'0.68rem',fontWeight:900,color:barColor}}>{p.label}</span>
+                    <div style={{display:'flex',alignItems:'center',gap:'0.5rem',flexShrink:0}}>
+                      {!p.isWinner&&need>0&&<span style={{fontSize:'0.75rem',color:'#555',fontFamily:"'Space Mono',monospace"}}>{need} away</span>}
+                      <span style={{fontFamily:"'Space Mono',monospace",fontSize:i<3?'0.95rem':'0.8rem',fontWeight:900,color:barColor}}>{p.label}</span>
                     </div>
                   </div>
-                  {i<3&&<div style={{position:'relative',marginTop:'0.4rem',height:4,borderRadius:3,background:'#ffffff0a',overflow:'hidden'}}>
+                  {i<3&&<div style={{position:'relative',marginTop:'0.5rem',height:5,borderRadius:3,background:'#ffffff0a',overflow:'hidden'}}>
                     <div style={{height:'100%',width:`${pct}%`,borderRadius:3,background:`linear-gradient(90deg,${barColor}88,${barColor})`,boxShadow:`0 0 10px ${barColor}66`,transition:'width 1s cubic-bezier(0.25,1,0.5,1)'}}/>
                   </div>}
                 </div>;})}
