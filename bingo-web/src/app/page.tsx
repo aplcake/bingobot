@@ -25,6 +25,8 @@ export default function AdminPage(){
   const[sg,setSg]=useState('');const[sc,setSc]=useState('');const[ri,setRi]=useState('');const[rc,setRc]=useState('1');
   const[jc,setJc]=useState<any>(null);const[ld,setLd]=useState(false);const[hg,setHg]=useState<Game|null>(null);
   const[streaks,setStreaks]=useState<any[]>([]);
+  const[pingRole,setPingRole]=useState<string>('');
+  const[pingRoleSaved,setPingRoleSaved]=useState(false);
 
   const fg=useCallback(async()=>{try{const r=await fetch(`${API}/api/games`,{headers:H});if(r.ok){setGames(await r.json());setConn(true);}}catch{setConn(false);}},[]);
   const fgi=useCallback(async(id:string)=>{try{const r=await fetch(`${API}/api/games/${id}`,{headers:H});if(r.ok)setAg(await r.json());}catch{}},[]);
@@ -33,7 +35,9 @@ export default function AdminPage(){
   const fst=useCallback(async()=>{try{const r=await fetch(`${API}/api/players/streaks`,{headers:H});if(r.ok)setStreaks(await r.json());}catch{}},[]);
 
   useEffect(()=>{if(typeof window!=='undefined'&&sessionStorage.getItem('bingo_auth')==='1')setAuthed(true);},[]);
-  useEffect(()=>{if(authed){fg();fgu();fst();}},[fg,fgu,fst,authed]);
+  useEffect(()=>{if(authed){fg();fgu();fst();
+    fetch(`${API}/api/defaults/pingrole`,{headers:H}).then(r=>r.json()).then(d=>{if(d.pingRoleId)setPingRole(d.pingRoleId);}).catch(()=>{});
+  }},[fg,fgu,fst,authed]);
   useEffect(()=>{if(!ag||ag.status==='ended')return;const i=setInterval(()=>fgi(ag.id),3000);return()=>clearInterval(i);},[ag,fgi]);
   useEffect(()=>{if(sg)fr(sg);},[sg,fr]);
   useEffect(()=>{if(guilds.length>0&&!sg)setSg(guilds[0].id);},[guilds,sg]);
@@ -72,6 +76,7 @@ export default function AdminPage(){
   async function end(){if(!ag||!confirm('End this game?'))return;await fetch(`${API}/api/games/${ag.id}/end`,{method:'POST',headers:H});await fgi(ag.id);await fg();}
   async function del(id:string){if(!confirm('Delete permanently?'))return;await fetch(`${API}/api/games/${id}`,{method:'DELETE',headers:H});if(ag?.id===id){setAg(null);setView('list');}if(hg?.id===id)setHg(null);await fg();}
   async function seedStreaks(gameId:string){if(!confirm('Seed +1 streak for all players in this game?'))return;try{const r=await fetch(`${API}/api/players/seed/${gameId}`,{method:'POST',headers:H});if(r.ok){const d=await r.json();alert(`Seeded ${d.seeded} players!`);fst();}}catch{}}
+  async function savePingRole(){try{await fetch(`${API}/api/defaults/pingrole`,{method:'POST',headers:H,body:JSON.stringify({pingRoleId:pingRole||null})});setPingRoleSaved(true);setTimeout(()=>setPingRoleSaved(false),2000);}catch{}}
   async function openH(id:string){try{const r=await fetch(`${API}/api/games/${id}`,{headers:H});if(r.ok){setHg(await r.json());setView('history');}}catch{}}
   function sel(g:GS){if(g.status==='ended')openH(g.id);else{fgi(g.id);setView('manage');}}
 
@@ -107,6 +112,17 @@ export default function AdminPage(){
             <span className="count" style={{color:c}}>{p.tier}</span>
           </div>;})}
         </div></>}
+
+      {/* Ping Role Config */}
+      <h2 style={{marginTop:'1.5rem'}}>🔔 Auto Ping Role</h2>
+      <p style={{fontSize:'0.75rem',color:'var(--text-dim)',marginBottom:'0.5rem'}}>Players who join any bingo game automatically get this role.</p>
+      <div className="row">
+        <div><label>Ping Role</label><select value={pingRole} onChange={e=>setPingRole(e.target.value)}>
+          <option value="">None (disabled)</option>
+          {roles.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+        </select></div>
+        <button className="btn btn-primary btn-sm" onClick={savePingRole} style={{alignSelf:'flex-end'}}>{pingRoleSaved?'✓ Saved':'Save'}</button>
+      </div>
     </div>}
 
     {/* CREATE */}

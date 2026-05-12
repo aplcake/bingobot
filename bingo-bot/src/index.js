@@ -412,6 +412,12 @@ client.on('interactionCreate', async (interaction) => {
   const member = await interaction.guild.members.fetch(userId).catch(() => null);
   if (!member) return interaction.reply({ content: '❌ Could not fetch member info.', ephemeral: true });
 
+  // Auto-assign bingo ping role
+  const defaults = loadDefaults();
+  if (defaults.pingRoleId) {
+    try { await member.roles.add(defaults.pingRoleId); } catch (e) { console.error('Could not assign ping role:', e.message); }
+  }
+
   // STACKING: sum all matching roles
   let cardCount = 0;
   for (const [roleId, count] of Object.entries(game.roleConfig)) {
@@ -664,6 +670,8 @@ app.get('/api/games/:id/display', (req, res) => {
 app.put('/api/games/:id/roles', auth, (req, res) => { const g = games[req.params.id]; if (!g) return res.status(404).json({ error: 'Not found' }); g.roleConfig = req.body.roleConfig || {}; saveGames(); res.json({ ok: true }); });
 app.post('/api/defaults/roles', auth, (req, res) => { const d = loadDefaults(); d.roleConfig = req.body.roleConfig || {}; saveDefaults(d); res.json({ ok: true }); });
 app.get('/api/defaults/roles', auth, (_, res) => { const d = loadDefaults(); res.json({ roleConfig: d.roleConfig || {} }); });
+app.post('/api/defaults/pingrole', auth, (req, res) => { const d = loadDefaults(); d.pingRoleId = req.body.pingRoleId || null; saveDefaults(d); res.json({ ok: true, pingRoleId: d.pingRoleId }); });
+app.get('/api/defaults/pingrole', auth, (_, res) => { const d = loadDefaults(); res.json({ pingRoleId: d.pingRoleId || null }); });
 
 app.post('/api/games/:id/post', auth, async (req, res) => {
   const game = games[req.params.id]; if (!game) return res.status(404).json({ error: 'Not found' }); if (game.status !== 'open') return res.status(400).json({ error: 'Not open' });
