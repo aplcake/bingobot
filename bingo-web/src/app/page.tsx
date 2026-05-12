@@ -71,6 +71,7 @@ export default function AdminPage(){
     const r=await fetch(`${API}/api/games/${ag.id}/call`,{method:'POST',headers:H,body:JSON.stringify(b)});if(r.ok){const d=await r.json();setJc(d.item);setTimeout(()=>setJc(null),2000);await fgi(ag.id);}}catch{}finally{setLd(false);}}
   async function end(){if(!ag||!confirm('End this game?'))return;await fetch(`${API}/api/games/${ag.id}/end`,{method:'POST',headers:H});await fgi(ag.id);await fg();}
   async function del(id:string){if(!confirm('Delete permanently?'))return;await fetch(`${API}/api/games/${id}`,{method:'DELETE',headers:H});if(ag?.id===id){setAg(null);setView('list');}if(hg?.id===id)setHg(null);await fg();}
+  async function seedStreaks(gameId:string){if(!confirm('Seed +1 streak for all players in this game?'))return;try{const r=await fetch(`${API}/api/players/seed/${gameId}`,{method:'POST',headers:H});if(r.ok){const d=await r.json();alert(`Seeded ${d.seeded} players!`);fst();}}catch{}}
   async function openH(id:string){try{const r=await fetch(`${API}/api/games/${id}`,{headers:H});if(r.ok){setHg(await r.json());setView('history');}}catch{}}
   function sel(g:GS){if(g.status==='ended')openH(g.id);else{fgi(g.id);setView('manage');}}
 
@@ -128,6 +129,7 @@ export default function AdminPage(){
       <div className="card"><h2>🏆 Winners</h2>{hg.winners.length===0&&<p style={{color:'var(--text-dim)'}}>No winners.</p>}
         {hg.winners.map((w:any,i:number)=><div key={i} className="winner-item"><div className="trophy">🏆</div><div className="info"><div className="name">{w.displayName||w.username}</div><div className="detail">Discord: <code>{w.discordId}</code> · Card #{w.cardIndex+1} · Won on {ntc(w.wonOnItem)}</div></div></div>)}
         {hg.winners.length>0&&<div style={{marginTop:'1rem',padding:'1rem',background:'var(--surface2)',borderRadius:'8px'}}><h3 style={{fontSize:'0.9rem',marginBottom:'0.5rem'}}>💰 Payout Export</h3><pre style={{fontFamily:"'Space Mono',monospace",fontSize:'0.7rem',color:'var(--text-dim)',whiteSpace:'pre-wrap',userSelect:'all'}}>{JSON.stringify(hg.winners.map((w:any)=>({discordId:w.discordId,username:w.username,wonAt:w.wonAt})),null,2)}</pre></div>}
+        <button className="btn btn-outline btn-sm" onClick={()=>seedStreaks(hg.id)} style={{marginTop:'0.75rem'}}>🔥 Seed +1 Streak for All Players</button>
       </div>
       <div className="card"><h2>👥 Players ({Object.keys(hg.players).length})</h2><div style={{maxHeight:'300px',overflow:'auto'}}>{Object.entries(hg.players).map(([uid,p]:[string,any])=><div key={uid} className="role-row"><span className="name">{p.displayName||p.username}</span><span className="count">{p.cards.length} card{p.cards.length>1?'s':''}</span><span style={{fontSize:'0.65rem',color:'var(--text-dim)',fontFamily:"'Space Mono',monospace"}}>{uid}</span></div>)}</div></div>
     </>}

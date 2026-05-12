@@ -193,21 +193,23 @@ function renderStackedCards(game, cards, totalCards, bonusCards = 0, tier = null
 
     // Card background - special cards get colored border
     if (isSpecial && tierColor) {
-      ctx.fillStyle = tierColor + '15';
+      // Outer glow
+      ctx.fillStyle = tierColor + '25';
       ctx.beginPath(); ctx.roundRect(offsetX - 6, offsetY - 6, singleCardW + 12, singleCardH + 12, 10); ctx.fill();
-      ctx.strokeStyle = tierColor + '88'; ctx.lineWidth = 2;
+      ctx.strokeStyle = tierColor; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.roundRect(offsetX - 6, offsetY - 6, singleCardW + 12, singleCardH + 12, 10); ctx.stroke();
     }
 
-    // Star card gets a subtle star pattern overlay
     if (cards[i].isStar) {
       ctx.strokeStyle = '#ffd70044'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(offsetX - 6, offsetY - 6, singleCardW + 12, singleCardH + 12, 10); ctx.stroke();
     }
 
-    ctx.fillStyle = isSpecial ? '#12101e' : '#0e0e1c';
+    // Card fill — tier cards get a tinted colored background
+    const tierBgs = { bronze: '#1e1510', silver: '#15161e', gold: '#1e1a0a', diamond: '#0a161e' };
+    ctx.fillStyle = isSpecial ? (tierBgs[cardType] || '#12101e') : '#0e0e1c';
     ctx.beginPath(); ctx.roundRect(offsetX - 4, offsetY - 4, singleCardW + 8, singleCardH + 8, 8); ctx.fill();
-    ctx.strokeStyle = isSpecial ? (tierColor || '#ffd700') + '44' : '#2a2a3a'; ctx.lineWidth = 1;
+    ctx.strokeStyle = isSpecial ? tierColor : '#2a2a3a'; ctx.lineWidth = isSpecial ? 2 : 1;
     ctx.beginPath(); ctx.roundRect(offsetX - 4, offsetY - 4, singleCardW + 8, singleCardH + 8, 8); ctx.stroke();
 
     renderSingleCardAt(ctx, game, cards[i], i + 1, totalCards, offsetX, offsetY, cellW, cellH, headerH, labelH, cardPadX, isCustom, cardType === 'regular' ? null : { name: cardType, emoji: cardType === 'bronze' ? '🥉' : cardType === 'silver' ? '🥈' : cardType === 'gold' ? '🥇' : cardType === 'diamond' ? '💎' : '★' }, tierColor, cards[i].isStar);
@@ -266,9 +268,9 @@ function renderSingleCardAt(ctx, game, card, cardNum, totalCards, ox, oy, cellW,
       const marked = isMarked(val, called);
       const ci = (!isCustom && typeof val === 'number') ? colFor(val) : null;
 
-      ctx.fillStyle = val === 'FREE' ? '#3d2a5c' : val === 'STAR' ? '#4a3a10' : marked ? (ci ? ci.color : '#ff6b35') : '#16162a';
+      ctx.fillStyle = val === 'FREE' ? '#3d2a5c' : val === 'STAR' ? '#4a3a10' : marked ? (ci ? ci.color : '#ff6b35') : (tierColor ? tierColor + '12' : '#16162a');
       ctx.beginPath(); ctx.roundRect(x + 2, y + 2, cellW - 4, cellH - 4, 5); ctx.fill();
-      ctx.strokeStyle = val === 'STAR' ? '#ffd70066' : (marked ? 'transparent' : '#2a2a3a'); ctx.lineWidth = val === 'STAR' ? 2 : 1; ctx.stroke();
+      ctx.strokeStyle = val === 'STAR' ? '#ffd70066' : (marked ? 'transparent' : (tierColor ? tierColor + '33' : '#2a2a3a')); ctx.lineWidth = val === 'STAR' ? 2 : 1; ctx.stroke();
 
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       if (val === 'FREE') {
@@ -550,6 +552,26 @@ app.get('/api/players/streaks', auth, (_, res) => {
     }))
     .sort((a, b) => b.streak - a.streak);
   res.json(list);
+});
+
+// Seed streaks from a past game (give all participants +1 streak)
+app.post('/api/players/seed/:gameId', auth, (req, res) => {
+  const game = games[req.params.gameId];
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  let seeded = 0;
+  for (const [uid, player] of Object.entries(game.players)) {
+    if (!playerHistory[uid]) {
+      playerHistory[uid] = { gamesPlayed: 1, wins: 0, streak: 1, username: player.username, lastGame: game.endedAt || game.createdAt };
+    } else {
+      playerHistory[uid].streak = (playerHistory[uid].streak || 0) + 1;
+      playerHistory[uid].gamesPlayed = (playerHistory[uid].gamesPlayed || 0) + 1;
+      playerHistory[uid].username = player.username;
+    }
+    if (game.winners.some(w => w.discordId === uid)) playerHistory[uid].wins = (playerHistory[uid].wins || 0) + 1;
+    seeded++;
+  }
+  saveHistory(playerHistory);
+  res.json({ ok: true, seeded, total: Object.keys(playerHistory).length });
 });
 
 app.get('/api/games', auth, (_, res) => {

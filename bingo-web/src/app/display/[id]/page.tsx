@@ -151,7 +151,9 @@ export default function DisplayPage(){
         {game.winners.length>0&&<div style={{width:'100%',marginTop:'0.5rem'}}>
           {game.winners.map((w:any,i:number)=>{
             const medals=['🥇','🥈','🥉'];const medal=i<3?medals[i]:`${i+1}.`;
-            return<div key={i} style={{display:'flex',alignItems:'center',gap:'0.6rem',padding:'0.55rem 0.75rem',marginBottom:'0.3rem',background:'#ffd70011',borderRadius:'10px',border:'1px solid #ffd70033',position:'relative'}}>
+            const bgColors=['#ffd70025','#c0c0c020','#cd7f3220','#ffffff08'];
+            const borderColors=['#ffd70066','#c0c0c055','#cd7f3255','#ffffff15'];
+            return<div key={i} style={{display:'flex',alignItems:'center',gap:'0.6rem',padding:'0.55rem 0.75rem',marginBottom:'0.3rem',background:bgColors[Math.min(i,3)],borderRadius:'10px',border:`2px solid ${borderColors[Math.min(i,3)]}`,position:'relative'}}>
               {i===0&&<span style={{position:'absolute',top:'-10px',left:'50%',transform:'translateX(-50%)',fontSize:'1.1rem'}}>👑</span>}
               <span style={{fontSize:i<3?'1.3rem':'0.9rem',minWidth:'1.8rem',textAlign:'center'}}>{medal}</span>
               <span style={{fontWeight:700,fontSize:i<3?'0.95rem':'0.82rem',color:i===0?'#ffd700':'#fff',flex:1}}>{w.displayName||w.username}</span>
@@ -164,13 +166,14 @@ export default function DisplayPage(){
         {game.leaderboard&&game.leaderboard.length>0&&game.calledNumbers.length>0&&(
           <div style={{width:'100%',marginTop:'0.75rem'}}>
             <div style={{fontSize:'0.8rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--text-dim)',marginBottom:'0.6rem'}}>🔥 Race to Bingo</div>
-            <div style={{display:'flex',flexDirection:'column',gap:'0.5rem',maxHeight:'350px',overflow:'auto'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:'0.5rem'}}>
               {game.leaderboard.slice(0,10).map((p:LB,i:number)=>{
                 const pct=Math.round((p.progress/p.total)*100);const need=p.total-p.progress;
                 const isTop=i<3&&!p.isWinner;const barColor=p.isWinner?'#ffd700':i===0?'#00ff88':i===1?'#00e5ff':i===2?'#ff6b35':'#666';
                 return<div key={i} onClick={()=>p.bestCard&&setHoverIdx(hoverIdx===i?null:i)} style={{
                   padding:i<3?'0.85rem 1rem':'0.65rem 1rem',borderRadius:'12px',position:'relative',overflow:'hidden',cursor:p.bestCard?'pointer':'default',
-                  background:p.isWinner?'#ffd70010':isTop?'#ffffff0a':'#ffffff05',border:`1px solid ${p.isWinner?'#ffd70044':isTop?barColor+'30':'#ffffff0a'}`,transition:'all 0.3s ease',
+                  background:p.isWinner?'#ffd70022':i===0?'#00ff8818':i===1?'#00e5ff15':i===2?'#ff6b3515':'#ffffff05',
+                  border:`2px solid ${p.isWinner?'#ffd70066':i===0?'#00ff8844':i===1?'#00e5ff44':i===2?'#ff6b3544':'#ffffff0a'}`,transition:'all 0.3s ease',
                 }}>
                   <div style={{position:'absolute',left:0,top:0,bottom:0,width:`${pct}%`,background:`linear-gradient(90deg,${barColor}20,${barColor}10)`,borderRadius:'12px',transition:'width 1s cubic-bezier(0.25,1,0.5,1)'}}/>
                   <div style={{position:'relative',display:'flex',alignItems:'center',gap:'0.75rem'}}>
